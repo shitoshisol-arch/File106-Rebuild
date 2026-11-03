@@ -5,6 +5,7 @@
   "description": "Manual-run Solana SPL token creation workspace for FILE106.",
   "type": "module",
   "scripts": {
+    "dev": "node scripts/serve-site.mjs",
     "check": "bash scripts/check-env.sh",
     "install:solana-tools": "bash scripts/install-solana-tools.sh",
     "generate:mint": "tsx scripts/generate-vanity-mint.ts",

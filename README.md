@@ -4,13 +4,13 @@ A dark, story-driven FILE106 website with a browser-based mystery experience and
 
 ## Run locally
 
-This is a static website. You can open `site/index.html` directly, or run a local server:
+This is a static website. You can open `site/index.html` directly, or run the bundled local server:
 
 ```bash
-npx serve site
+npm run dev
 ```
 
-Then open the local URL printed by the server.
+It serves `site/` at http://127.0.0.1:4174. Set `PORT=8080 npm run dev` to use another port.
 
 ## What is included
 
@@ -358,7 +358,7 @@ npm run trust:report -- --json
 
 It verifies the mint program, fixed supply, decimals, revoked authorities, locked metadata, public metadata JSON, LP burn, Raydium pool, DEX market, Jupiter route, and Jupiter/CoinGecko listing status.
 
-The static trust site is in `site/` and is published at https://shitoshisol-arch.github.io/File106/ by the `Deploy trust site` workflow on every push that touches `site/`. Preview it locally with `npx serve site`. Replace the remaining social placeholders in `output/trust/jupiter-vrfd-submission.md` and `output/trust/coingecko-submission.md`. The site uses only public on-chain links and has no analytics or wallet connection.
+The static trust site is in `site/` and is published at https://shitoshisol-arch.github.io/File106-Rebuild/ by the `Deploy trust site` workflow on every push that touches `site/`. Preview it locally with `npm run dev`. Replace the remaining social placeholders in `output/trust/jupiter-vrfd-submission.md` and `output/trust/coingecko-submission.md`. The site uses only public on-chain links and has no analytics or wallet connection.
 
 ## Windows Notes
 
