@@ -102,11 +102,21 @@ const answerKey = randomBytes(32).toString('hex');
 
 const siteOrigin = `https://${domain}`;
 
+// The name people reach by mistake has to exist too: with a www-canonical site
+// the apex resolves to the same box, and without redirect it dead-ends on the
+// TLS handshake. Derive the companion from --domain so one flag keeps both
+// names consistent — www.<host> redirects to <host>, <host> redirects to
+// www.<host>.
+const siteRedirectDomain = domain.startsWith('www.')
+  ? domain.slice(4)
+  : `www.${domain}`;
+
 const values = {
   POSTGRES_PASSWORD: postgresPassword,
   DATABASE_URL: `postgres://file106:${postgresPassword}@127.0.0.1:5432/file106`,
   SITE_DOMAIN: domain,
   SITE_ORIGIN: siteOrigin,
+  SITE_REDIRECT_DOMAIN: siteRedirectDomain,
   SESSION_SECRET: sessionSecret,
   ANSWER_ENC_KEY: answerKey,
   F106_MINT_ADDRESS: CANONICAL_MINT,
@@ -161,6 +171,7 @@ if (read('SESSION_SECRET').length !== 64) problems.push('SESSION_SECRET was not 
 if (!/^[0-9a-f]{64}$/.test(read('ANSWER_ENC_KEY'))) problems.push('ANSWER_ENC_KEY was not written');
 if (!read('POSTGRES_PASSWORD')) problems.push('POSTGRES_PASSWORD was not written');
 if (read('SITE_ORIGIN') !== siteOrigin) problems.push('SITE_ORIGIN does not match the domain');
+if (read('SITE_REDIRECT_DOMAIN') !== siteRedirectDomain) problems.push('SITE_REDIRECT_DOMAIN does not match the domain');
 if (!read('DATABASE_URL').includes(postgresPassword)) problems.push('DATABASE_URL does not carry the generated password');
 
 if (problems.length) {
@@ -177,6 +188,7 @@ console.log(`  OK    POSTGRES_PASSWORD  generated, ${label.POSTGRES_PASSWORD} ur
 console.log(`  OK    DATABASE_URL       points at 127.0.0.1:5432/file106`);
 console.log(`  OK    SITE_DOMAIN        ${domain}`);
 console.log(`  OK    SITE_ORIGIN        ${siteOrigin}`);
+console.log(`  OK    SITE_REDIRECT_DOMAIN  ${siteRedirectDomain}`);
 console.log(`  OK    SESSION_SECRET     generated, ${label.SESSION_SECRET} hex characters`);
 console.log(`  OK    ANSWER_ENC_KEY     generated, ${label.ANSWER_ENC_KEY} hex characters`);
 

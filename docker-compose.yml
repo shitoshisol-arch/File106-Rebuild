@@ -89,6 +89,10 @@ services:
     restart: unless-stopped
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN:-localhost}
+      # The non-canonical name that redirects to SITE_DOMAIN (see the Caddyfile).
+      # localhost default means: no extra name on a dev box, Caddy serves it
+      # internally and never contacts a certificate authority for it.
+      SITE_REDIRECT_DOMAIN: ${SITE_REDIRECT_DOMAIN:-www.localhost}
     ports:
       - "80:80"
       - "443:443"

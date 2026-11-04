@@ -6,6 +6,14 @@
 # reachable from the internet — a proxy in front of this (orange cloud) breaks
 # the challenge.
 #
+# SITE_REDIRECT_DOMAIN is the extra name that points at the same box but is not
+# the canonical host — for a site at www.file106.site that is the apex,
+# file106.site. Its block only redirects, with its own certificate, so visitors
+# on either name land on the canonical name. init-env.mjs derives it from
+# --domain (apex for a www host, www for an apex host); it defaults to
+# www.localhost, which Caddy serves internally, so the block always parses and
+# stays harmless on a developer machine.
+#
 # A 502 here means the app container is not up yet or is still starting; check
 # `docker compose logs app`.
 
@@ -42,4 +50,10 @@
 		}
 		format json
 	}
+}
+
+# Redirects the non-canonical name to SITE_DOMAIN without touching the
+# canonical block above. Everything else — redirects only, one permanent hop.
+{$SITE_REDIRECT_DOMAIN:-www.localhost} {
+	redir https://{$SITE_DOMAIN}{uri} permanent
 }

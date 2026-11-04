@@ -1,8 +1,9 @@
 # Deploying THE FILE106 ARCHIVE on a small VPS
 
 The stack is one Ubuntu box running four containers. **Which box** is a swappable
-choice — pick a door in §1 and every step after it is identical. The other pieces
-are free tiers: **DuckDNS** subdomain, **Helius** RPC, **Brevo** mail.
+choice — pick a door in §1 and every step after it is identical. The pieces
+around it are a **registered domain** (`www.file106.site`, Hostinger), free-tier
+**Helius** RPC and **Brevo** mail.
 
 Nothing here touches on-chain state, and no step ever asks for a wallet secret.
 
@@ -142,26 +143,56 @@ sudo systemctl restart ssh
 
 ---
 
-## 2. The name — DuckDNS
+## 2. The name — DuckDNS or a domain you own
 
-1. Sign in at duckdns.org with GitHub/Google, add a subdomain, e.g.
-   `file106` → `file106.duckdns.org`.
-2. Set its IP to the instance's public IPv4.
+This deployment lives at `www.file106.site`, registered at **Hostinger**. That
+changes the DNS half of the runbook — everything else is identical.
+
+### 2. A real domain — Hostinger (the path this deploy uses)
+
+The domain is already registered; the only work is repointing it from the
+Hostinger parking page to the VPS, inside hPanel:
+
+1. Sign in at hpanel.hostinger.com → **Domains** → `file106.site` →
+   **DNS / Nameservers**. Keep Hostinger's nameservers
+   (`ns1.dns-parking.com` / `ns2.dns-parking.com`) — they are the zone editor.
+2. **A records** — the parking record points at Hostinger's showcase IP;
+   replace it:
+   - `@` (the apex) → the instance's **public IPv4**
+   - `www` → CNAME to `file106.site`, or an A record with the same IP — both
+     reach the box; the apex is redirected to `www` by Caddy, never served
+   - Delete the default MX / parked-mail records unless mail is wanted now;
+     Brevo's SPF/DKIM records come later, from Brevo's own instructions
 3. Confirm before going further — the certificate cannot be issued otherwise:
 
 ```bash
-nslookup file106.duckdns.org
-# must answer with your VPS IP
+nslookup www.file106.site
+# must answer with the VPS IP
 ```
 
-If the IP ever changes, update it in the DuckDNS dashboard (or via the token
-URL) and restart Caddy only if the certificate was never issued.
+DNS edits take a few minutes to propagate. The parking page will linger on one
+host until it does; that is normal.
 
-**What this name cannot do:** DuckDNS holds A records only, so you cannot add
-SPF, DKIM, or DMARC records. That affects email (§4), not the site.
+**Why `www` is canonical.** `init-env.mjs` writes `SITE_DOMAIN=www.file106.site`
+and `SITE_REDIRECT_DOMAIN=file106.site` together; Caddy serves the canonical
+name with the full security headers and hands every apex request a single 301.
+Wallet linking embeds `SITE_ORIGIN` in the signed message, so the canonical
+name must never change after accounts exist — switching means rerunning
+`init-env.mjs --force`, not editing one line.
 
-**Skip this section if you took door 1c behind carrier-grade NAT** — the tunnel
-supplies its own hostname, and none of the certificate steps below apply.
+### 2b. What a DuckDNS subdomain would do instead
+
+DuckDNS holds A records only — fine for the site, but without your own domain
+there is no SPF/DKIM, so verification mail fights spam filters. The runbook's
+DuckDNS steps:
+
+1. Sign in at duckdns.org, add a subdomain, e.g. `file106` →
+   `file106.duckdns.org`.
+2. Set its IP to the instance's public IPv4.
+3. Confirm: `nslookup file106.duckdns.org` — must answer with the VPS IP.
+
+If the IP changes, update the record and restart Caddy only if the certificate
+was never issued.
 
 ### The edge cache — optional, and only with a domain of your own
 
@@ -171,17 +202,13 @@ Cloudflare serves `styles.css`, `app.js` and `favicon.svg` from edge nodes and
 passes HTML through — which `no-store` on `/` requires anyway. Caddy still
 terminates TLS.
 
-The catch is that Cloudflare can only front a zone you control, and a
-`duckdns.org` name cannot be delegated. So:
-
-- **No domain of your own:** stay on DuckDNS and plain Caddy TLS. Nothing breaks
-  and nothing gets billed — you simply skip the edge.
-- **A domain you own:** point its nameservers at Cloudflare, add an A record to
-  the instance's static IP, and set the record to proxied (orange cloud) with SSL
-  mode **Full (strict)**. DuckDNS then becomes unnecessary, and §4's mail problems
-  go away with it.
-
-Which is why a real domain is the first thing worth buying — see "Cost" below.
+The catch is that Cloudflare can only front a zone you control. Moving
+`file106.site` there means switching nameservers at Hostinger to Cloudflare's,
+adding an A record to the instance's static IP for both `@` and `www`, and
+setting the records to proxied (orange cloud) with SSL mode **Full (strict)**.
+Cloudflare's proxy also breaks Caddy's HTTP-01 challenge on the edge — with
+proxied records use Cloudflare origin certificates, or leave the records
+unproxied and keep plain Caddy TLS.
 
 ---
 
@@ -242,15 +269,16 @@ git clone <your repo url> /opt/file106 && cd /opt/file106
 sudo bash scripts/archive/bootstrap-vps.sh   # packages, swap, firewall, Docker
 
 node scripts/archive/init-env.mjs \
-  --domain file106.duckdns.org \
+  --domain www.file106.site \
   --rpc "https://mainnet.helius-rpc.com/?api-key=<helius key>" \
   --smtp "smtp://<brevo login>:<smtp key>@smtp-brevo.com:587" \
   --mail-from <the address you verified with Brevo>
 ```
 
 `init-env` writes `.env` at mode 600, generates `POSTGRES_PASSWORD`,
-`SESSION_SECRET` and `ANSWER_ENC_KEY`, derives `SITE_ORIGIN` from `--domain` and
-pins `F106_MINT_ADDRESS` to the canonical mint. It reports what it wrote and
+`SESSION_SECRET` and `ANSWER_ENC_KEY`, derives `SITE_ORIGIN` and
+`SITE_REDIRECT_DOMAIN` from `--domain` and pins `F106_MINT_ADDRESS` to the
+canonical mint. It reports what it wrote and
 never the values, so no secret lands in your scrollback or shell history.
 Re-running it refuses to overwrite without `--force`. Omit `--smtp` to have
 verification links written to the log instead of mailed.
@@ -287,8 +315,9 @@ request to the hostname.
 ## 6. Verify
 
 ```bash
-curl -fsS https://file106.duckdns.org/healthz          # {"status":"ok"}
-curl -fsSI https://file106.duckdns.org/ | head -n 5     # 200, HSTS present
+curl -fsS https://www.file106.site/healthz          # {"status":"ok"}
+curl -fsSI https://www.file106.site/ | head -n 5     # 200, HSTS present
+curl -fsSI http://file106.site/ | head -n 3          # 301, location: https://www.file106.site/
 ```
 
 Then in a browser: the trust page at `/`, register an account, confirm the
@@ -353,7 +382,8 @@ site — DuckDNS works fine for TLS. Because of **email**: only a domain you con
 can carry SPF and DKIM, which is the difference between "verification mail
 sometimes in spam" and "verification mail arrives". It is also the only way to put
 an edge cache in front (§2), which is a latency and WAF improvement rather than
-the budget necessity it would have been on Google's free tier.
+the budget necessity it would have been on Google's free tier. This deploy has
+one: `file106.site` at Hostinger, per §2.
 
 Switching to a real domain later is safe and does not disturb existing accounts:
 
@@ -362,7 +392,7 @@ SITE_DOMAIN=file106.xyz
 SITE_ORIGIN=https://file106.xyz
 ```
 
-then `docker compose restart app` (and update the DuckDNS-free DNS A record).
+then `docker compose restart app` (and update the DNS A record).
 Wallets already linked stay linked: the origin is only used inside the
 challenge/verify pair for *new* signatures. Only the historical `proof_message`
 text stored for earlier links still names the old host — a cosmetic record, not
