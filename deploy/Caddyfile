@@ -13,6 +13,14 @@
 # --domain (apex for a www host, www for an apex host); it defaults to
 # www.localhost, which Caddy serves internally, so the block always parses and
 # stays harmless on a developer machine.
+{
+	# Pin the production ACME directory. Without this, Caddy silently falls
+	# back to Let's Encrypt staging for a cooldown after early production
+	# failures — harmless when staging is reachable, a dead loop when it is
+	# not (some networks blackhole its edge IPs). Early failures here were
+	# the firewall not yet open, not rate limits, so production is safe.
+	acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
 #
 # A 502 here means the app container is not up yet or is still starting; check
 # `docker compose logs app`.

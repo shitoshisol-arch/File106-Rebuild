@@ -1,6 +1,6 @@
 import { html, raw } from '../lib/html.js';
 import { dateTimeLabel } from '../lib/format.js';
-import { CHAPTER_STATUSES } from '../lib/validate.js';
+import { CHAPTER_STATUSES, DIFFICULTIES } from '../lib/validate.js';
 import { adminShell, selectField, stat, textArea, textField } from './admin.js';
 import { errorList, notice, page } from './layout.js';
 
@@ -141,18 +141,29 @@ export function adminCluesPage({ admin, clues = [], message = '' }) {
           <p class="fine">Add a clue, then place [[SYMBOL:n]] or [[REDACT:n]] in a document.</p>
         </div>`
       : html`<table class="admin-table">
-          <thead><tr><th>№</th><th>Clue</th><th>Location</th><th>Chain</th><th>Enabled</th><th>Updated</th></tr></thead>
+          <thead><tr><th>№</th><th>Clue</th><th>Difficulty</th><th>File / Chapter</th><th>Chain</th><th>Enabled</th><th>Updated</th><th></th></tr></thead>
           <tbody>
             ${clues.map(
               (clue) => html`<tr>
                 <td class="mono">${String(clue.clue_no).padStart(3, '0')}</td>
                 <td><a href="/admin/clues/${clue.id}">${clue.title}</a><span class="fine mono"> / ${clue.slug}</span></td>
-                <td class="fine">${clue.location || '—'}</td>
+                <td class="mono">${clue.difficulty || 'medium'}</td>
+                <td class="fine mono">
+                  ${clue.file_number ? `FILE ${String(clue.file_number).padStart(3, '0')}` : ''}
+                  ${clue.chapter_no ? ` CH ${String(clue.chapter_no).padStart(2, '0')}` : ''}
+                  ${!clue.file_number && !clue.chapter_no ? (clue.location || '—') : ''}
+                </td>
                 <td class="fine mono">
                   ${clue.requires_clue_no ? `after ${String(clue.requires_clue_no).padStart(3, '0')}` : 'root'}
                 </td>
-                <td><span class="status-chip" data-state="${clue.is_enabled ? 'open' : 'closed'}">${clue.is_enabled ? 'ENABLED' : 'DISABLED'}</span></td>
+                <td><span class="status-chip" data-state="${clue.is_enabled ? 'open' : 'closed'}">${clue.is_enabled ? 'ENABLED' : 'HIDDEN'}</span></td>
                 <td class="mono">${dateTimeLabel(clue.updated_at)}</td>
+                <td>
+                  <form method="post" action="/admin/clues/${clue.id}/delete" class="inline-form">
+                    <input type="hidden" name="csrf" value="${admin.csrf}">
+                    <button type="submit" class="nav-button">DELETE</button>
+                  </form>
+                </td>
               </tr>`
             )}
           </tbody>
@@ -182,13 +193,27 @@ export function adminClueEditorPage({ admin, clue = null, errors = {}, values = 
       ${textField({ name: 'location', label: 'LOCATION', value: values.location ?? '', required: false, hint: 'Where the symbol/redaction lives, e.g. homepage hero.' })}
       <div class="field-row">
         ${textField({ name: 'chapterNo', label: 'CHAPTER', type: 'number', value: values.chapterNo ?? '', required: false })}
-        ${textField({ name: 'fileNumber', label: 'FILE NUMBER', type: 'number', value: values.fileNumber ?? '', required: false })}
-        ${textField({ name: 'requiresClueNo', label: 'REQUIRES CLUE', type: 'number', value: values.requiresClueNo ?? '', required: false })}
+        ${textField({ name: 'fileNumber', label: 'ASSIGN TO FILE №', type: 'number', value: values.fileNumber ?? '', required: false })}
+        ${textField({ name: 'requiresClueNo', label: 'CONNECT AFTER CLUE №', type: 'number', value: values.requiresClueNo ?? '', required: false })}
       </div>
-      ${checkbox({ name: 'isEnabled', label: 'Enabled (a disabled clue cannot be discovered)', checked: values.isEnabled !== false })}
+      <div class="field-row">
+        ${selectField({ name: 'difficulty', label: 'CLUE DIFFICULTY', options: DIFFICULTIES, value: values.difficulty ?? 'medium' })}
+        ${textField({ name: 'releaseAt', label: 'SCHEDULE RELEASE (UTC)', type: 'datetime-local', value: values.releaseAt ?? '', required: false })}
+      </div>
+      ${checkbox({ name: 'isEnabled', label: 'Enabled / Visible when discovered (uncheck to hide clue)', checked: values.isEnabled !== false })}
 
       <button class="btn primary" type="submit">${isNew ? 'CREATE CLUE' : 'SAVE CLUE'}</button>
     </form>
+
+    ${isNew
+      ? raw('')
+      : html`<div class="admin-panel">
+          <p class="eyebrow">CLUE PREVIEW // HOW VISITORS SEE THIS FRAGMENT WHEN DECODED</p>
+          <p class="mono"><strong>CLUE ${String(clue.clue_no).padStart(3, '0')} — ${clue.title}</strong> (${clue.difficulty || 'medium'})</p>
+          <p>${clue.body}</p>
+          ${clue.hint ? html`<p class="fine">Locked hint: ${clue.hint}</p>` : raw('')}
+          <p class="fine mono">Embed marker in a file or chapter: [[SYMBOL:${clue.clue_no}]] or [[REDACT:${clue.clue_no}]]</p>
+        </div>`}
 
     <p class="archive-cta"><a class="btn ghost" href="/admin/clues">ALL CLUES</a></p>`;
 

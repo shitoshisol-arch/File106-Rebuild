@@ -67,13 +67,24 @@ export function fileLockState({ file, discoveredClues = new Set(), unlockedNumbe
     return { locked: false, reason: '', method: 'open' };
   }
 
-  if (file.required_file_number && !unlockedNumbers.has(Number(file.required_file_number))) {
-    return {
-      locked: true,
-      reason: 'prerequisite',
-      method: null,
-      requiredFile: Number(file.required_file_number),
-    };
+  if (file.required_file_number) {
+    // FILE_013 (THE CONNECTION) can be configured to require completion of the
+    // three network files (010, 011, 012); check each in order and report the
+    // first unrecovered record.
+    const requiredList =
+      Number(file.file_number) === 13 && [10, 11, 12].includes(Number(file.required_file_number))
+        ? [10, 11, 12]
+        : [Number(file.required_file_number)];
+    for (const reqNo of requiredList) {
+      if (!unlockedNumbers.has(reqNo)) {
+        return {
+          locked: true,
+          reason: 'prerequisite',
+          method: null,
+          requiredFile: reqNo,
+        };
+      }
+    }
   }
 
   if (file.unlock_requires_clue && !discoveredClues.has(Number(file.unlock_requires_clue))) {

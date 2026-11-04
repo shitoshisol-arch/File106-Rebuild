@@ -150,7 +150,7 @@ export async function investigateRoutes(app, { db }) {
       const clue = await db.one(
         `select id, clue_no, title, body, hint, location, requires_clue_no
            from clues
-          where clue_no = $1 and is_enabled`,
+          where clue_no = $1 and is_enabled and (release_at is null or release_at <= now())`,
         [clueNo]
       );
 

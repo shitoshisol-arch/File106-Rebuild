@@ -109,6 +109,7 @@ export const MESSAGES = {
   'chapter-created': 'CHAPTER CREATED AS A DRAFT.',
   'clue-saved': 'CLUE SAVED.',
   'clue-created': 'CLUE CREATED. IT IS HIDDEN UNTIL SOMEONE FINDS IT.',
+  'clue-deleted': 'CLUE REMOVED.',
   'submission-approved': 'SUBMISSION APPROVED. A REWARD RECORD IS AWAITING MANUAL PAYMENT.',
   'submission-rejected': 'SUBMISSION REJECTED.',
   'submission-unknown': 'NO SUCH SUBMISSION.',
@@ -126,6 +127,30 @@ export const MESSAGES = {
   'winner-duplicate': 'THIS WALLET HAS ALREADY WON THIS FILE.',
   'submission-not-pending': 'THAT SUBMISSION IS NOT AWAITING REVIEW.',
   'reward-recorded': 'REWARD RECORD CREATED.',
+  // Control room
+  'file-deleted': 'FILE DELETED. THE AUDIT LOG KEEPS THE RECORD.',
+  'file-delete-blocked': 'THIS FILE CANNOT BE DELETED: SUBMISSIONS OR REWARDS EXIST. ARCHIVE IT INSTEAD.',
+  'file-duplicated': 'FILE DUPLICATED AS A NEW DRAFT.',
+  'file-reordered': 'FILE ORDER UPDATED.',
+  'puzzle-saved': 'PUZZLE SAVED. ANSWERS ARE SEALED AS HASHES.',
+  'puzzle-deleted': 'PUZZLE REMOVED.',
+  'puzzle-locked': 'THIS PUZZLE CANNOT CHANGE: SOMEONE HAS ALREADY SUBMITTED AGAINST IT.',
+  'puzzle-unknown': 'NO SUCH PUZZLE ON THIS FILE.',
+  'scheduled': 'FILE SCHEDULED. THE SCHEDULER OPENS IT AT THE SET TIME.',
+  'window-closed': 'THIS FILE IS OUTSIDE ITS OPENING WINDOW.',
+  'window-not-open': 'THIS FILE HAS NOT OPENED YET.',
+  'puzzle-invalid': 'CHECK THE PUZZLE FIELDS.',
+  'reviewer-read-only': 'REVIEWER ACCOUNTS HAVE READ-ONLY ACCESS.',
+  'investigator-suspended': 'ACCOUNT SUSPENDED.',
+  'investigator-activated': 'ACCOUNT REACTIVATED.',
+  'investigator-unknown': 'NO SUCH INVESTIGATOR.',
+  'settings-saved': 'SETTINGS SAVED.',
+  'team-created': 'ARCHIVIST ACCOUNT CREATED.',
+  'team-updated': 'ARCHIVIST ACCOUNT UPDATED.',
+  'team-blocked': 'THAT ACTION IS BLOCKED: THE LAST OWNER CANNOT BE REMOVED.',
+  'team-owner-required': 'OWNER ROLE ONLY. YOU DO NOT HAVE IT.',
+  'setup-done': 'OWNER ACCOUNT CREATED. SIGN IN TO OPEN THE CONTROL ROOM.',
+  'setup-unavailable': 'SETUP IS CLOSED: AN ACTIVE OWNER ALREADY EXISTS.',
 };
 
 // ---------------------------------------------------------------------
@@ -246,6 +271,23 @@ export function validateFileInput(body = {}) {
     errors.closesAt = 'The closing time must be after the opening time.';
   }
 
+  const subtitle = normalizeText(body.subtitle);
+  if (subtitle.length > 200) errors.subtitle = 'Keep the subtitle under 200 characters.';
+
+  const fileType = normalizeText(body.fileType) || 'story';
+  if (!FILE_TYPES.includes(fileType)) errors.fileType = 'Unknown file type.';
+
+  const sortRaw = normalizeText(body.sortOrder);
+  let sortOrder = null;
+  if (sortRaw !== '') {
+    const parsed = Number.parseInt(sortRaw, 10);
+    if (!/^\d+$/.test(sortRaw) || parsed < 0 || parsed > 100000) {
+      errors.sortOrder = 'Use a whole number between 0 and 100000, or leave it blank.';
+    } else {
+      sortOrder = parsed;
+    }
+  }
+
   const classification = normalizeText(body.classification) || 'UNCLASSIFIED';
   if (classification.length > 40) errors.classification = 'Keep the classification under 40 characters.';
 
@@ -308,12 +350,24 @@ export function validateFileInput(body = {}) {
 
   const isMystery = Boolean(body.isMystery) || chapterNo !== null || loreBody !== '' || unlockCode !== '';
 
+  const flag = (val, fallback = true) => {
+    if (val === undefined) return body.formControlsPresent ? false : fallback;
+    if (val === false || val === '0' || val === 'false' || val === 'off' || val === '') return false;
+    return true;
+  };
+
   return {
     errors,
     value: {
       fileNumber: number,
       slug,
       title,
+      subtitle,
+      fileType,
+      sortOrder,
+      requiresRegistration: flag(body.requiresRegistration, true),
+      requiresWallet: flag(body.requiresWallet, true),
+      rewardsEnabled: flag(body.rewardsEnabled, true),
       teaser,
       briefing,
       difficulty,
@@ -337,7 +391,30 @@ export function validateFileInput(body = {}) {
   };
 }
 
-export const FILE_STATUSES = ['draft', 'open', 'locked', 'closed', 'completed', 'archived'];
+// 'scheduled' means: published, but invisible until the scheduler flips it to
+// 'open' when opens_at arrives. The scheduler lives in app/index.js.
+export const FILE_STATUSES = ['draft', 'scheduled', 'open', 'locked', 'closed', 'completed', 'archived'];
+
+export const FILE_TYPES = [
+  'story',
+  'transmission',
+  'puzzle',
+  'image_evidence',
+  'encrypted',
+  'reward_challenge',
+  'classified',
+];
+
+export const PUZZLE_TYPES = [
+  'text',
+  'numeric',
+  'password',
+  'choice',
+  'code',
+  'riddle',
+  'sequence',
+  'multi_step',
+];
 
 export function validateChallengeInput(body = {}) {
   const errors = {};
@@ -349,27 +426,84 @@ export function validateChallengeInput(body = {}) {
   const answerFormat = normalizeText(body.answerFormat) || 'text';
   if (!['text', 'numeric'].includes(answerFormat)) errors.answerFormat = 'Unknown answer format.';
 
-  const answer = normalizeText(body.answer);
-  if (!answer) errors.answer = 'The answer is required: it is hashed, never stored.';
-  else if (answer.length < 2) errors.answer = 'Use at least 2 characters.';
-  else if (answer.length > 500) errors.answer = 'Keep the answer under 500 characters.';
-  else if (answerFormat === 'numeric' && !/^-?\d+(\.\d+)?$/.test(answer)) {
-    errors.answer = 'A numeric answer must contain only digits, a dash and a decimal point.';
+  const puzzleType = normalizeText(body.puzzleType) || 'text';
+  if (!PUZZLE_TYPES.includes(puzzleType)) errors.puzzleType = 'Unknown puzzle type.';
+
+  const choices = [];
+  if (puzzleType === 'choice') {
+    const raw = String(body.choices ?? '')
+      .split('\n')
+      .map((line) => line.trim().slice(0, 200))
+      .filter((line) => line !== '');
+    if (raw.length < 2 || raw.length > 6) {
+      errors.choices = 'A multiple-choice puzzle needs 2-6 options, one per line.';
+    } else {
+      choices.push(...raw);
+    }
   }
+
+  const answers = [normalizeText(body.answer), normalizeText(body.answer2), normalizeText(body.answer3)]
+    .slice(0, puzzleType === 'choice' || puzzleType === 'multi_step' ? 3 : 3)
+    .filter((entry, index) => entry !== '' || index === 0);
+  const uniqueAnswers = [...new Set(answers.map((entry) => entry.toLowerCase()))];
+
+  if (!answers[0]) {
+    errors.answer = 'The answer is required: it is hashed, never stored.';
+  }
+
+  for (const [index, entry] of answers.entries()) {
+    if (entry === '') continue;
+    if (entry.length < 2) errors[`answer${index > 0 ? index + 1 : ''}`] = 'Use at least 2 characters.';
+    else if (entry.length > 500) errors[`answer${index > 0 ? index + 1 : ''}`] = 'Keep the answer under 500 characters.';
+    else if (answerFormat === 'numeric' && !/^-?\d+(\.\d+)?$/.test(entry)) {
+      errors[`answer${index > 0 ? index + 1 : ''}`] = 'A numeric answer must contain only digits, a dash and a decimal point.';
+    }
+  }
+
+  if (uniqueAnswers.length !== answers.length) {
+    errors.answer2 = 'The accepted answers must differ.';
+  }
+
+  if (puzzleType === 'choice' && answers[0] && choices.length > 0) {
+    const labelled = answers.every((entry) => entry === '' || choices.includes(entry));
+    if (!labelled) errors.answer = 'A multiple-choice answer must be one of the listed options.';
+  }
+
+  const hint = normalizeText(body.hint);
+  if (hint.length > 800) errors.hint = 'Keep the hint under 800 characters.';
 
   const maxAttempts = Number.parseInt(normalizeText(body.maxAttempts) || '1', 10);
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) {
     errors.maxAttempts = 'Allow between 1 and 10 attempts.';
   }
 
+  const positionRaw = normalizeText(body.position);
+  let position = 1;
+  if (positionRaw !== '') {
+    const parsed = Number.parseInt(positionRaw, 10);
+    if (!/^\d+$/.test(positionRaw) || parsed < 1 || parsed > 6) {
+      errors.position = 'A file supports up to 6 puzzles. Use a step number between 1 and 6.';
+    } else {
+      position = parsed;
+    }
+  }
+
   return {
     errors,
     value: {
       prompt,
-      answer,
+      answer: answers[0] ?? '',
+      answer2: answers[1] ?? '',
+      answer3: answers[2] ?? '',
       answerFormat,
+      puzzleType,
+      choices,
+      hint,
       caseSensitive: Boolean(body.caseSensitive),
       maxAttempts,
+      position,
+      hasAnswer2: Boolean(answers[1]),
+      hasAnswer3: Boolean(answers[2]),
     },
   };
 }
@@ -488,6 +622,12 @@ export function validateClueInput(body = {}) {
     errors.requiresClueNo = 'A clue cannot require itself.';
   }
 
+  const difficulty = normalizeText(body.difficulty) || 'medium';
+  if (!DIFFICULTIES.includes(difficulty)) errors.difficulty = 'Unknown difficulty.';
+
+  const released = timestamp(body.releaseAt, 'Release time');
+  if (released.error) errors.releaseAt = released.error;
+
   return {
     errors,
     value: {
@@ -500,9 +640,44 @@ export function validateClueInput(body = {}) {
       chapterNo: chapter.value,
       fileNumber: file.value,
       requiresClueNo: requires.value,
+      difficulty,
+      releaseAt: released.value,
       isEnabled: body.isEnabled === undefined ? true : Boolean(body.isEnabled),
     },
   };
+}
+
+// Control-room settings: only whitelisted keys can be written, and each has its
+// own shape check, so a mistyped form field cannot plant an arbitrary setting.
+export const SETTING_KEYS = {
+  'archive.default_min_holding': {
+    parse: (raw) => amount(raw, { fallback: '1.00000000', max: TOTAL_SUPPLY_F106 }),
+    label: 'Default minimum holding (F106)',
+  },
+  'archive.default_reward': {
+    parse: (raw) => amount(raw, { fallback: '1.00000000', max: TOTAL_SUPPLY_F106 }),
+    label: 'Default reward (F106)',
+  },
+  'archive.maintenance_banner': {
+    parse: (raw) => ({ value: Boolean(raw) }),
+    label: 'Maintenance banner on public pages',
+  },
+  'archive.tagline': {
+    parse: (raw) => {
+      const text = String(raw ?? '').trim();
+      if (text.length > 200) return { error: 'Keep the tagline under 200 characters.' };
+      return { value: text };
+    },
+    label: 'Archive tagline',
+  },
+};
+
+export function validateSettingInput(key, raw) {
+  const rule = SETTING_KEYS[key];
+  if (!rule) return { error: 'Unknown setting.' };
+  const parsed = rule.parse(raw);
+  if (parsed.error) return { error: parsed.error };
+  return { value: parsed.value };
 }
 
 export function validateUnlockCode(value) {

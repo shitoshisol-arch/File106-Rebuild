@@ -10,6 +10,7 @@
 //     pasted signature on its own marks nothing paid.
 
 import { openAnswer } from '../../scripts/archive/secret-hash.mjs';
+import { dateTimeInput } from '../lib/format.js';
 import { messageText, validateChapterInput, validateClueInput, validateAdminNote, validateTransactionSignature } from '../lib/validate.js';
 import { parseUnits, explorerUrlFor } from '../lib/solana.js';
 import { redirect, sendPage } from '../lib/reply.js';
@@ -49,6 +50,8 @@ const clueValues = (row = {}) => ({
   chapterNo: row.chapter_no ?? '',
   fileNumber: row.file_number ?? '',
   requiresClueNo: row.requires_clue_no ?? '',
+  difficulty: row.difficulty ?? 'medium',
+  releaseAt: dateTimeInput(row.release_at),
   isEnabled: row.is_enabled ?? true,
 });
 
@@ -244,8 +247,8 @@ export async function registerMysteryAdminRoutes(
   // -------------------------------------------------------------------
   app.get('/admin/clues', async (request, reply) => {
     const clues = await db.many(
-      `select clue_no, slug, title, location, chapter_no, file_number,
-              requires_clue_no, is_enabled, updated_at
+      `select id, clue_no, slug, title, location, chapter_no, file_number,
+              requires_clue_no, difficulty, release_at, is_enabled, updated_at
          from clues
         order by clue_no asc`
     );
@@ -300,8 +303,8 @@ export async function registerMysteryAdminRoutes(
       clue = await db.one(
         `insert into clues
            (clue_no, slug, title, body, hint, location, chapter_no, file_number,
-            requires_clue_no, is_enabled, created_by)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            requires_clue_no, difficulty, release_at, is_enabled, created_by)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          returning id, clue_no`,
         [
           value.clueNo,
@@ -313,6 +316,8 @@ export async function registerMysteryAdminRoutes(
           value.chapterNo,
           value.fileNumber,
           value.requiresClueNo,
+          value.difficulty,
+          value.releaseAt,
           value.isEnabled,
           request.admin.id,
         ]
@@ -395,7 +400,8 @@ export async function registerMysteryAdminRoutes(
         `update clues
             set clue_no = $2, slug = $3, title = $4, body = $5, hint = $6,
                 location = $7, chapter_no = $8, file_number = $9,
-                requires_clue_no = $10, is_enabled = $11
+                requires_clue_no = $10, difficulty = $11, release_at = $12,
+                is_enabled = $13
           where id = $1`,
         [
           before.id,
@@ -408,6 +414,8 @@ export async function registerMysteryAdminRoutes(
           value.chapterNo,
           value.fileNumber,
           value.requiresClueNo,
+          value.difficulty,
+          value.releaseAt,
           value.isEnabled,
         ]
       );
@@ -438,6 +446,25 @@ export async function registerMysteryAdminRoutes(
     });
 
     return redirect(reply, `/admin/clues/${before.id}?notice=clue-saved`);
+  });
+
+  app.post('/admin/clues/:id/delete', async (request, reply) => {
+    if (!UUID.test(request.params.id)) return redirect(reply, '/admin/clues?notice=clue-unknown');
+    const before = await db.one('select id, clue_no, slug, title from clues where id = $1', [
+      request.params.id,
+    ]);
+    if (!before) return redirect(reply, '/admin/clues?notice=clue-unknown');
+
+    await db.query('delete from clues where id = $1', [before.id]);
+    await audit(db, {
+      adminId: request.admin.id,
+      action: 'clue.delete',
+      entity: 'clues',
+      entityId: before.id,
+      before: { clueNo: before.clue_no, slug: before.slug, title: before.title },
+    });
+
+    return redirect(reply, '/admin/clues?notice=clue-deleted');
   });
 
   // -------------------------------------------------------------------

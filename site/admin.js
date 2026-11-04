@@ -73,4 +73,16 @@ function initAttachmentPanel() {
   });
 }
 
+function initConfirmForms() {
+  for (const form of document.querySelectorAll('form[data-confirm]')) {
+    form.addEventListener('submit', (event) => {
+      const promptText = form.getAttribute('data-confirm') || 'Confirm this action?';
+      if (!window.confirm(promptText)) {
+        event.preventDefault();
+      }
+    });
+  }
+}
+
 initAttachmentPanel();
+initConfirmForms();

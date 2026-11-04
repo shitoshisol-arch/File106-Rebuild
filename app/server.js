@@ -86,7 +86,7 @@ export async function buildServer({ config, db, balanceReader, mailer, transacti
         defaultSrc: ["'self'"],
         baseUri: ["'self'"],
         scriptSrc: ["'self'"],
-        styleSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'https://gateway.pinata.cloud', 'https://i.ibb.co', 'data:'],
         fontSrc: ["'self'"],
         connectSrc: ["'self'"],
@@ -195,16 +195,16 @@ export async function buildServer({ config, db, balanceReader, mailer, transacti
   // for someone to visit with a stale cookie.
   app.decorate('sessionStore', sessionStore);
 
+  // Uploads are written outside the served directory, so this store is the only
+  // way any of them can be read back.
+  const uploads = createUploadStore(config.uploads);
+
   await app.register(homeRoutes, { db, config, balanceReader });
   await app.register(authRoutes, { db, config, mailer });
   await app.register(walletRoutes, { db, config, balanceReader });
   await app.register(dashboardRoutes, { db, config, balanceReader });
-  await app.register(archiveRoutes, { db, config, balanceReader });
+  await app.register(archiveRoutes, { db, config, uploads, balanceReader });
   await app.register(investigateRoutes, { db, config });
-
-  // Uploads are written outside the served directory, so this store is the only
-  // way any of them can be read back.
-  const uploads = createUploadStore(config.uploads);
   await app.register(adminRoutes, { db, config, uploads, balanceReader, transactionVerifier });
 
   return app;

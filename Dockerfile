@@ -29,6 +29,10 @@ COPY package.json ./
 COPY app ./app
 COPY site ./site
 COPY db/migrations ./db/migrations
+# The app's seal/verify helpers live in scripts/archive; auth, answers and the
+# archive routes import them at runtime. Only this module ships — nothing in
+# scripts/ that manipulates keys or runs the token flow belongs in the image.
+COPY scripts/archive/secret-hash.mjs ./scripts/archive/secret-hash.mjs
 
 # Private exhibits live on a mounted volume, owned by the unprivileged user that
 # writes them. Creating it here means a fresh container has somewhere to write

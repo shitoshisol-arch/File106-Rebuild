@@ -5,6 +5,7 @@ import { page, notice } from './layout.js';
 
 export const STATUS_COPY = {
   draft: { label: 'DRAFT', note: 'Not published. Visible to archivists only.' },
+  scheduled: { label: 'SCHEDULED', note: 'Scheduled for automatic release at its opening time.' },
   open: { label: 'OPEN', note: 'Briefing available; submissions are accepted.' },
   locked: { label: 'LOCKED', note: 'A correct answer is in review. No further submissions.' },
   closed: { label: 'CLOSED', note: 'The window has ended. No further submissions.' },
@@ -37,22 +38,36 @@ function fileCard(file) {
       ${file.classification ? html`<span class="classification">${file.classification}</span>` : raw('')}
     </p>
     <h3><a href="/archive/${file.slug}">${file.title}</a></h3>
+    ${file.subtitle ? html`<p class="fine mono">${file.subtitle}</p>` : raw('')}
     <p class="file-teaser">${file.teaser}</p>
     <p class="file-meta">
       ${file.locked
         ? html`<span class="status-chip" data-state="locked">SEALED</span>`
         : html`<span class="status-chip" data-state="${file.status}">${STATUS_COPY[file.status]?.label || file.status}</span>`}
       <span class="mono">${file.difficulty}</span>
-      <span class="mono">${file.reward} F106</span>
+      ${file.rewardsEnabled === false ? raw('') : html`<span class="mono">${file.reward} F106</span>`}
     </p>
   </article>`;
 }
 
-export function archiveListPage({ session, groups = [], total = 0, signedIn = false, message = '' }) {
+export function archiveListPage({
+  session,
+  groups = [],
+  total = 0,
+  signedIn = false,
+  maintenanceBanner = false,
+  tagline = '',
+  message = '',
+}) {
   const published = groups.filter((group) => group.files.length > 0);
 
   const body = html`
     <section class="section archive-section">
+      ${maintenanceBanner
+        ? html`<p class="archive-notice" data-kind="archive" role="status">
+            ARCHIVE TRANSMISSION NOTICE // ${tagline || 'MAINTENANCE WINDOW ACTIVE'}
+          </p>`
+        : raw('')}
       <p class="eyebrow">TERMINAL / THE ARCHIVE</p>
       <h1 class="archive-title">FILES IN CUSTODY</h1>
       <p class="lede">
@@ -139,7 +154,37 @@ function sealedPanel({ file, csrf }) {
   </div>`;
 }
 
-function answerPanel({ file, eligibility, challenge, submission, csrf }) {
+function renderChallengeForm({ file, challenge, submission, csrf }) {
+  const choices = Array.isArray(challenge.choices) ? challenge.choices : [];
+  const isChoice = challenge.puzzle_type === 'choice' && choices.length > 0;
+  const inputType = challenge.puzzle_type === 'password' ? 'password' : 'text';
+
+  return html`<form method="post" action="/archive/${file.slug}/submit" class="auth-form">
+    <input type="hidden" name="csrf" value="${csrf}">
+    <input type="hidden" name="challengeId" value="${challenge.id}">
+    ${isChoice
+      ? html`<fieldset class="field" style="border:0;padding:0;margin:0 0 1rem 0;">
+          <legend class="field-label">SELECT ONE OPTION</legend>
+          ${choices.map(
+            (opt) => html`<label class="field field-check" style="margin:0.35rem 0;">
+              <input type="radio" name="answer" value="${opt}" required>
+              <span>${opt}</span>
+            </label>`
+          )}
+        </fieldset>`
+      : html`<label class="field">
+          <span class="field-label">ANSWER</span>
+          <input class="field-input" type="${inputType}" name="answer" autocomplete="off" spellcheck="false" required>
+        </label>`}
+    <p class="field-hint">
+      ${String(submission?.remaining ?? challenge.max_attempts)} attempt(s) remain.
+      The attempt is encrypted before it is stored and is compared on the server.
+    </p>
+    <button class="btn primary" type="submit">SUBMIT ANSWER</button>
+  </form>`;
+}
+
+function answerPanel({ file, eligibility, challenge, puzzles = [], submission, csrf }) {
   if (file.status !== 'open') {
     return html`<div class="archive-pending">
       <p class="eyebrow">SUBMISSION TERMINAL</p>
@@ -163,12 +208,18 @@ function answerPanel({ file, eligibility, challenge, submission, csrf }) {
     </div>`;
   }
 
+  const walletRequired = file.requiresWallet !== false || Number(file.minHolding) > 0;
+
   const rows = [
     checkRow(true, 'Account verified', 'Signed in with a verified address.'),
     checkRow(
-      Boolean(eligibility.wallet),
-      'Wallet linked',
-      eligibility.wallet ? eligibility.wallet : 'Link a wallet from MY ARCHIVE to prove ownership.'
+      !walletRequired || Boolean(eligibility.wallet),
+      walletRequired ? 'Wallet linked' : 'Wallet optional',
+      eligibility.wallet
+        ? eligibility.wallet
+        : walletRequired
+          ? 'Link a wallet from MY ARCHIVE to prove ownership.'
+          : 'No wallet required for this file.'
     ),
   ];
 
@@ -184,47 +235,54 @@ function answerPanel({ file, eligibility, challenge, submission, csrf }) {
     );
   }
 
-  const eligible = Boolean(eligibility.wallet) && eligibility.satisfied;
+  const eligible = (!walletRequired || Boolean(eligibility.wallet)) && eligibility.satisfied;
+  const list = puzzles.length > 0 ? puzzles : challenge ? [{ challenge, state: submission }] : [];
 
   let terminal;
-  if (!challenge) {
+  if (list.length === 0) {
     terminal = html`<p class="fine">
       No answer is attached to this file yet. Nothing can be submitted until an archivist seals one.
     </p>`;
-  } else if (submission?.hasCorrect) {
-    terminal = html`<p class="fine">
-      A correct answer is already on file and is awaiting archivist review. A reward is created
-      only after that review and the manual on-chain payment.
-    </p>`;
-  } else if (submission?.remaining <= 0) {
-    terminal = html`<p class="fine">
-      No attempts remain for this file. The recorded attempts are on file for the archivist.
-    </p>`;
-  } else if (eligible) {
-    terminal = html`<form method="post" action="/archive/${file.slug}/submit" class="auth-form">
-      <input type="hidden" name="csrf" value="${csrf}">
-      <label class="field">
-        <span class="field-label">ANSWER</span>
-        <input class="field-input" type="text" name="answer" autocomplete="off" spellcheck="false" required>
-        <span class="field-hint">
-          ${String(submission?.remaining ?? challenge.max_attempts)} attempt(s) remain.
-          The attempt is encrypted before it is stored and is compared on the server.
-        </span>
-      </label>
-      <button class="btn primary" type="submit">SUBMIT ANSWER</button>
-    </form>`;
+  } else if (list.length === 1) {
+    const item = list[0];
+    if (item.state?.hasCorrect) {
+      terminal = html`<p class="fine">
+        A correct answer is already on file and is awaiting archivist review. A reward is created
+        only after that review and the manual on-chain payment.
+      </p>`;
+    } else if (item.state?.remaining <= 0) {
+      terminal = html`<p class="fine">
+        No attempts remain for this file. The recorded attempts are on file for the archivist.
+      </p>`;
+    } else if (eligible) {
+      terminal = renderChallengeForm({ file, challenge: item.challenge, submission: item.state, csrf });
+    } else {
+      terminal = html`<p class="fine">Meet the holding requirement before the answer box opens.</p>`;
+    }
   } else {
-    terminal = html`<p class="fine">Meet the holding requirement before the answer box opens.</p>`;
+    terminal = html`${list.map((item) => html`<div class="admin-panel" style="margin-top:1rem;">
+      <p class="field-label">STEP ${item.challenge.position} · ${String(item.challenge.puzzle_type || 'text').toUpperCase()}</p>
+      <p class="puzzle-text">${item.challenge.prompt}</p>
+      ${item.challenge.hint ? html`<p class="fine">Hint: ${item.challenge.hint}</p>` : raw('')}
+      ${item.state?.hasCorrect
+        ? html`<p class="fine"><strong>✓ STEP ${item.challenge.position} SOLVED</strong> — recorded for review.</p>`
+        : item.state?.remaining <= 0
+          ? html`<p class="fine">No attempts remain for this step.</p>`
+          : eligible
+            ? renderChallengeForm({ file, challenge: item.challenge, submission: item.state, csrf })
+            : html`<p class="fine">Meet the holding requirement before the answer box opens.</p>`}
+    </div>`)}`;
   }
 
   return html`<div class="wallet-panel">
     <p class="eyebrow">SUBMISSION TERMINAL</p>
     <h2>${submission?.hasCorrect ? 'AWAITING REVIEW' : eligible ? 'ELIGIBLE' : 'NOT YET ELIGIBLE'}</h2>
     <ul class="checklist">${rows}</ul>
-    ${challenge
+    ${list.length === 1 && challenge && !submission?.hasCorrect
       ? html`<div class="puzzle-prompt">
           <p class="field-label">PUZZLE</p>
           <p class="puzzle-text">${challenge.prompt}</p>
+          ${challenge.hint ? html`<p class="fine">Hint: ${challenge.hint}</p>` : raw('')}
         </div>`
       : raw('')}
     ${terminal}
@@ -241,6 +299,7 @@ export function archiveFilePage({
   file,
   eligibility,
   challenge = null,
+  puzzles = [],
   submission = { attempts: 0, remaining: 0, hasCorrect: false },
   csrf = '',
   message = '',
@@ -256,15 +315,20 @@ export function archiveFilePage({
         ${file.chapterNo ? html` / CHAPTER ${String(file.chapterNo).padStart(2, '0')}` : raw('')}
       </p>
       <h1 class="archive-title">${file.title}</h1>
+      ${file.subtitle ? html`<p class="eyebrow">${file.subtitle}</p>` : raw('')}
       <p class="lede">${file.teaser}</p>
 
       ${notice('archive', message)}
 
+      ${file.hasCover
+        ? html`<div class="admin-panel"><img src="/archive/${file.slug}/cover" alt="${file.title}" style="max-width:100%;height:auto;display:block;"></div>`
+        : raw('')}
+
       <div class="stats archive-stats" aria-label="File facts">
         <div class="stat">
           <span class="stat-label">REWARD</span>
-          <strong>${file.reward}</strong>
-          <span class="stat-note">F106, paid manually after verification</span>
+          <strong>${file.rewardsEnabled === false ? 'NONE' : file.reward}</strong>
+          <span class="stat-note">${file.rewardsEnabled === false ? 'Unrewarded investigation' : 'F106, paid manually after verification'}</span>
         </div>
         <div class="stat">
           <span class="stat-label">MIN HOLDING</span>
@@ -305,7 +369,7 @@ export function archiveFilePage({
                   ${renderDocument(file.loreBody)}
                 </div>`
               : raw('')}
-            ${answerPanel({ file, eligibility, challenge, submission, csrf })}
+            ${answerPanel({ file, eligibility, challenge, puzzles, submission, csrf })}
           `}
 
       <p class="fine">

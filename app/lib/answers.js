@@ -21,7 +21,19 @@ export function hashChallengeAnswer(answer, { caseSensitive = false } = {}) {
   return hashSecret(normalizeAnswer(answer, { caseSensitive }));
 }
 
-export function challengeAnswerMatches(input, storedHash, { caseSensitive = false } = {}) {
+export function challengeAnswerMatches(input, storedHash, { caseSensitive = false, extraHashes = [] } = {}) {
   if (typeof storedHash !== 'string' || !storedHash.startsWith(ANSWER_HASH_PREFIX)) return false;
-  return verifySecret(normalizeAnswer(input, { caseSensitive }), storedHash);
+  const candidate = normalizeAnswer(input, { caseSensitive });
+
+  if (verifySecret(candidate, storedHash)) return true;
+
+  // Multiple accepted answers: each alternate carries its own salt and
+  // parameters, so every one of them is a real scrypt verify. The case rule is
+  // the challenge's, applied to the input once.
+  const alternates = Array.isArray(extraHashes)
+    ? extraHashes
+    : Object.values(extraHashes ?? {});
+  return alternates.some(
+    (hash) => typeof hash === 'string' && hash.startsWith(ANSWER_HASH_PREFIX) && verifySecret(candidate, hash)
+  );
 }

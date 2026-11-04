@@ -11,6 +11,7 @@ output
 docs
 deploy
 scripts
+!scripts/archive/secret-hash.mjs
 *.md
 *.log
 db/tests

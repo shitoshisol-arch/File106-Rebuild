@@ -4,6 +4,8 @@ import { loadConfig } from './config.js';
 import { createDb, createPgExecutor } from './db.js';
 import { createRpcBalanceReader, createRpcTransactionVerifier } from './lib/solana.js';
 import { createMailer } from './lib/mailer.js';
+import { runArchiveScheduler } from './routes/archive.js';
+import { ensureNetworkInvestigations } from './routes/controlRoom.js';
 import { buildServer } from './server.js';
 
 const config = loadConfig();
@@ -26,6 +28,12 @@ const app = await buildServer({
 });
 
 try {
+  await ensureNetworkInvestigations(db).catch((error) => {
+    app.log.warn({ err: error.message }, 'could not seed network investigation drafts');
+  });
+  await runArchiveScheduler(db).catch((error) => {
+    app.log.warn({ err: error.message }, 'initial archive scheduler pass failed');
+  });
   await app.listen({ port: config.port, host: config.host });
   app.log.info(
     { cluster: config.solana.cluster, mail: mailer.delivered ? 'smtp' : 'log-only' },
@@ -51,10 +59,18 @@ const sweep = setInterval(() => {
 }, 60 * 60 * 1000);
 sweep.unref();
 
+const scheduler = setInterval(() => {
+  runArchiveScheduler(db).catch((error) => {
+    app.log.warn({ err: error.message }, 'archive scheduler failed');
+  });
+}, 60 * 1000);
+scheduler.unref();
+
 async function shutdown(signal) {
   if (closing) return;
   closing = true;
   clearInterval(sweep);
+  clearInterval(scheduler);
   app.log.info({ signal }, 'shutting down');
   try {
     await app.close();

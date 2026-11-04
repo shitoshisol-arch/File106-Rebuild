@@ -1,16 +1,16 @@
-// Public archive: the file list, one file page, access-code unlocking and the
-// answer terminal.
+// Public archive: the file list, one file page, access-code unlocking, public
+// cover image delivery, and the answer terminal.
 //
 // Rules that hold on every path here:
 //
-//   * Drafts and archived files are invisible, so a URL cannot leak something
-//     an archivist has not published.
-//   * No query in this file selects `challenges.answer_hash` or
-//     `files.unlock_code_hash`. A hash is fetched only inside the two POST
-//     handlers that compare it, and it never reaches a view or a redirect.
+//   * Drafts, scheduled, and archived files are invisible, so a URL cannot leak
+//     something an archivist has not published.
+//   * No query in this file selects `challenges.answer_hash`,
+//     `challenge_answers.answer_hash`, or `files.unlock_code_hash` outside the
+//     two POST handlers that compare them, and those hashes never reach a view
+//     or a redirect.
 //   * A file's sealed section is rendered only after the server has decided the
-//     visitor is allowed to see it. The browser is never the thing that hides
-//     an answer.
+//     visitor is allowed to see it.
 
 import { challengeAnswerMatches } from '../lib/answers.js';
 import { csrfToken } from '../lib/csrf.js';
@@ -27,8 +27,8 @@ import {
 import { redirect, sendPage } from '../lib/reply.js';
 import { archiveFilePage, archiveListPage } from '../views/archive.js';
 
-// Anything not listed here is not public. 'draft' and 'archived' are absent on
-// purpose, so the default for a new status is invisible rather than exposed.
+// Anything not listed here is not public. 'draft', 'scheduled' and 'archived'
+// are absent on purpose.
 const PUBLIC_STATUSES = ['open', 'locked', 'closed', 'completed'];
 
 const GROUPS = [
@@ -39,6 +39,26 @@ const GROUPS = [
 ];
 
 const SLUG = /^[a-z0-9-]{1,80}$/;
+const UUID = /^[0-9a-f-]{36}$/i;
+
+// Transitions 'scheduled' files whose opens_at has arrived to 'open', and
+// 'open' files whose closes_at has passed to 'closed'.
+export async function runArchiveScheduler(db) {
+  await db.query(
+    `update files
+        set status = 'open'
+      where status = 'scheduled'
+        and opens_at is not null
+        and opens_at <= now()`
+  );
+  await db.query(
+    `update files
+        set status = 'closed'
+      where status = 'open'
+        and closes_at is not null
+        and closes_at <= now()`
+  );
+}
 
 function summarise(row, context) {
   const lock = fileLockState({
@@ -51,6 +71,10 @@ function summarise(row, context) {
     number: row.file_number,
     slug: row.slug,
     title: row.title,
+    subtitle: row.subtitle || '',
+    fileType: row.file_type || 'story',
+    rewardsEnabled: row.rewards_enabled !== false,
+    hasCover: Boolean(row.cover_attachment_id),
     teaser: row.teaser,
     difficulty: row.difficulty,
     status: row.status,
@@ -62,9 +86,11 @@ function summarise(row, context) {
   };
 }
 
-// The four columns that decide access. `unlock_code_hash` itself is never
-// selected; the boolean is the only thing a page needs to know.
-const FILE_COLUMNS = `file_number, slug, title, teaser, briefing, difficulty, status,
+// `unlock_code_hash` itself is never selected; the boolean is the only thing a
+// page needs to know.
+const FILE_COLUMNS = `id, file_number, slug, title, subtitle, file_type,
+  requires_registration, requires_wallet, rewards_enabled, cover_attachment_id,
+  teaser, briefing, difficulty, status,
   reward_amount_f106::text as reward,
   min_holding_f106::text  as min_holding,
   winner_method, max_winners, opens_at, closes_at,
@@ -78,13 +104,13 @@ function unlockMethodFor(file) {
   return 'open';
 }
 
-async function loadChallenge(db, fileId) {
-  return db.one(
-    `select id, position, prompt, answer_format, max_attempts
+async function loadChallenges(db, fileId) {
+  if (!fileId) return [];
+  return db.many(
+    `select id, position, prompt, answer_format, puzzle_type, max_attempts, hint, choices
        from challenges
       where file_id = $1
-      order by position asc
-      limit 1`,
+      order by position asc`,
     [fileId]
   );
 }
@@ -109,24 +135,36 @@ async function submissionState(db, userId, challenge) {
   };
 }
 
-export async function archiveRoutes(app, { db, config, balanceReader }) {
+async function loadArchiveBannerSettings(db) {
+  const rows = await db.many(
+    `select key, value from settings where key in ('archive.maintenance_banner', 'archive.tagline')`
+  );
+  const out = { maintenanceBanner: false, tagline: '' };
+  for (const r of rows) {
+    if (r.key === 'archive.maintenance_banner') out.maintenanceBanner = Boolean(r.value);
+    if (r.key === 'archive.tagline' && typeof r.value === 'string') out.tagline = r.value;
+  }
+  return out;
+}
+
+export async function archiveRoutes(app, { db, config, uploads, balanceReader }) {
   app.get('/archive', async (request, reply) => {
+    await runArchiveScheduler(db);
     const context = await loadUserContext(db, request.user?.id);
+    const banner = await loadArchiveBannerSettings(db);
 
     const rows = await db.many(
-      `select file_number, slug, title, teaser, difficulty, status,
+      `select file_number, slug, title, subtitle, file_type, rewards_enabled,
+              cover_attachment_id, teaser, difficulty, status,
               reward_amount_f106::text as reward, classification,
               is_mystery, required_file_number, unlock_requires_clue,
               (unlock_code_hash is not null) as has_unlock_code
          from files
         where is_enabled and status = any($1::text[])
-        order by file_number asc`,
+        order by sort_order asc, file_number asc`,
       [PUBLIC_STATUSES]
     );
 
-    // Counted separately so the empty state can say "nothing published" rather
-    // than "nothing exists" — the difference matters to whoever just installed
-    // the archive and wonders whether their work was saved.
     const total = await db.value('select count(*)::int as v from files');
 
     const groups = GROUPS.map((group) => ({
@@ -143,16 +181,45 @@ export async function archiveRoutes(app, { db, config, balanceReader }) {
         groups,
         total,
         signedIn: Boolean(request.user),
+        maintenanceBanner: banner.maintenanceBanner,
+        tagline: banner.tagline,
         message: messageText(String(request.query?.notice ?? '')),
       })
     );
   });
 
+  // Public cover image delivery — only serves an attachment that the archivist
+  // explicitly marked as the file's public cover on a published file.
+  app.get('/archive/:slug/cover', async (request, reply) => {
+    const slug = String(request.params.slug ?? '');
+    if (!SLUG.test(slug) || !uploads) return reply.callNotFound();
+
+    const row = await db.one(
+      `select a.storage_key, a.mime_type, a.filename
+         from files f
+         join file_attachments a on a.id = f.cover_attachment_id and a.file_id = f.id
+        where f.slug = $1 and f.is_enabled and f.status = any($2::text[])
+          and a.is_public = true and a.kind = 'image'`,
+      [slug, PUBLIC_STATUSES]
+    );
+    if (!row) return reply.callNotFound();
+
+    try {
+      const buffer = await uploads.read(row.storage_key);
+      return reply
+        .type(row.mime_type)
+        .header('cache-control', 'public, max-age=300')
+        .send(buffer);
+    } catch {
+      return reply.callNotFound();
+    }
+  });
+
   app.get('/archive/:slug', async (request, reply) => {
     const slug = String(request.params.slug ?? '');
-    // Rejected before the query: an unshaped slug cannot be a record, and this
-    // keeps the index lookup to one shape.
     if (!SLUG.test(slug)) return reply.callNotFound();
+
+    await runArchiveScheduler(db);
 
     const file = await db.one(
       `select ${FILE_COLUMNS}
@@ -171,9 +238,6 @@ export async function archiveRoutes(app, { db, config, balanceReader }) {
       unlockedNumbers: context.unlockedNumbers,
     });
 
-    // Opening a file that needs no code is itself a discovery. Failure to record
-    // it must not deny a page the visitor is allowed to read, so this is a write
-    // after the decision rather than part of it.
     if (user && !lock.locked && !context.unlockedNumbers.has(Number(file.file_number))) {
       await recordFileUnlock(db, {
         userId: user.id,
@@ -183,13 +247,27 @@ export async function archiveRoutes(app, { db, config, balanceReader }) {
       context.unlockedNumbers.add(Number(file.file_number));
     }
 
-    const challenge = await loadChallenge(db, file.id);
+    const challenges = await loadChallenges(db, file.id);
+    const challenge = challenges[0] || null;
     const state = await submissionState(db, user?.id, challenge);
+    const puzzleStates = [];
+    for (const c of challenges) {
+      puzzleStates.push({
+        challenge: c,
+        state: await submissionState(db, user?.id, c),
+      });
+    }
 
     const view = {
       number: file.file_number,
       slug: file.slug,
       title: file.title,
+      subtitle: file.subtitle || '',
+      fileType: file.file_type || 'story',
+      requiresRegistration: file.requires_registration !== false,
+      requiresWallet: file.requires_wallet !== false,
+      rewardsEnabled: file.rewards_enabled !== false,
+      hasCover: Boolean(file.cover_attachment_id),
       teaser: file.teaser,
       briefing: file.briefing ?? '',
       difficulty: file.difficulty,
@@ -220,7 +298,7 @@ export async function archiveRoutes(app, { db, config, balanceReader }) {
       wallet: '',
       balance: '',
       balanceError: '',
-      satisfied: false,
+      satisfied: file.requires_wallet === false && Number(file.min_holding) === 0,
     };
 
     if (user) {
@@ -234,8 +312,6 @@ export async function archiveRoutes(app, { db, config, balanceReader }) {
         try {
           const balance = await balanceReader(wallet.address);
           eligibility.balance = balance.amount;
-          // The holding rule compares base units, so a 1.00000001 balance
-          // satisfies a 1 F106 file without any float rounding in between.
           eligibility.satisfied =
             balance.baseUnits >= parseUnits(file.min_holding, config.solana.decimals);
         } catch (error) {
@@ -252,6 +328,7 @@ export async function archiveRoutes(app, { db, config, balanceReader }) {
         file: view,
         eligibility,
         challenge: view.locked ? null : challenge,
+        puzzles: view.locked ? [] : puzzleStates,
         submission: state,
         csrf: csrfToken(request.session),
         message: messageText(String(request.query?.notice ?? '')),
@@ -305,8 +382,6 @@ export async function archiveRoutes(app, { db, config, balanceReader }) {
 
       if (parsed.error) return redirect(reply, `/archive/${slug}?notice=code-invalid`);
 
-      // Stored with the same normalisation as the admin input, so casing and
-      // surrounding whitespace cannot decide whether a recovered code works.
       if (!verifySecret(parsed.value.normalize('NFKC'), secret?.unlock_code_hash ?? '')) {
         request.log.warn(
           { fileId: file.id, userId: request.user.id, ip: ipHash(request) },
@@ -337,9 +412,12 @@ export async function archiveRoutes(app, { db, config, balanceReader }) {
 
       if (!request.user) return redirect(reply, '/login?notice=login-required');
 
+      await runArchiveScheduler(db);
+
       const file = await db.one(
         `select id, file_number, slug, title, status, reward_amount_f106::text as reward,
-                min_holding_f106::text as min_holding, max_winners, closes_at,
+                min_holding_f106::text as min_holding, max_winners, opens_at, closes_at,
+                requires_wallet, rewards_enabled,
                 is_mystery, required_file_number, unlock_requires_clue,
                 (unlock_code_hash is not null) as has_unlock_code
            from files
@@ -351,6 +429,13 @@ export async function archiveRoutes(app, { db, config, balanceReader }) {
 
       if (file.status !== 'open') {
         return redirect(reply, `/archive/${slug}?notice=file-sealed`);
+      }
+
+      if (file.opens_at && new Date(file.opens_at) > new Date()) {
+        return redirect(reply, `/archive/${slug}?notice=window-not-open`);
+      }
+      if (file.closes_at && new Date(file.closes_at) <= new Date()) {
+        return redirect(reply, `/archive/${slug}?notice=window-closed`);
       }
 
       const context = await loadUserContext(db, request.user.id);
@@ -370,8 +455,14 @@ export async function archiveRoutes(app, { db, config, balanceReader }) {
         return redirect(reply, `/archive/${slug}?notice=${notice}`);
       }
 
-      const challenge = await loadChallenge(db, file.id);
-      if (!challenge) return redirect(reply, `/archive/${slug}?notice=file-sealed`);
+      const challenges = await loadChallenges(db, file.id);
+      if (challenges.length === 0) return redirect(reply, `/archive/${slug}?notice=file-sealed`);
+
+      const requestedId = String(request.body?.challengeId ?? '');
+      let challenge = UUID.test(requestedId)
+        ? challenges.find((c) => c.id === requestedId)
+        : null;
+      if (!challenge) challenge = challenges[0];
 
       const state = await submissionState(db, request.user.id, challenge);
       if (state.hasCorrect) return redirect(reply, `/archive/${slug}?notice=already-submitted`);
@@ -384,32 +475,40 @@ export async function archiveRoutes(app, { db, config, balanceReader }) {
         'select address from user_wallets where user_id = $1 and is_primary = true',
         [request.user.id]
       );
-      if (!wallet) return redirect(reply, `/archive/${slug}?notice=wallet-required`);
 
-      // The holding rule is read from the chain here, not from anything the
-      // browser sent, and again at admin approval. A wallet that sells between
-      // the two is refused at the second check.
-      let balance;
-      try {
-        balance = await balanceReader(wallet.address);
-      } catch (error) {
-        request.log.warn({ err: error.message }, 'balance read failed on submit');
-        return redirect(reply, `/archive/${slug}?notice=balance-unavailable`);
+      const walletNeeded = file.requires_wallet !== false || Number(file.min_holding) > 0;
+      if (walletNeeded && !wallet) {
+        return redirect(reply, `/archive/${slug}?notice=wallet-required`);
       }
 
-      const required = parseUnits(file.min_holding, config.solana.decimals);
-      if (balance.baseUnits < required) {
-        return redirect(reply, `/archive/${slug}?notice=submission-holding`);
+      let balance = { amount: '0.00000000', baseUnits: 0n };
+      if (wallet) {
+        try {
+          balance = await balanceReader(wallet.address);
+        } catch (error) {
+          request.log.warn({ err: error.message }, 'balance read failed on submit');
+          return redirect(reply, `/archive/${slug}?notice=balance-unavailable`);
+        }
+
+        const required = parseUnits(file.min_holding, config.solana.decimals);
+        if (balance.baseUnits < required) {
+          return redirect(reply, `/archive/${slug}?notice=submission-holding`);
+        }
       }
 
-      // The hash is fetched only here, in the handler that compares it.
+      // The hashes are fetched only here, in the handler that compares them.
       const sealed = await db.one(
         'select answer_hash, case_sensitive from challenges where id = $1',
+        [challenge.id]
+      );
+      const alternates = await db.many(
+        'select answer_hash from challenge_answers where challenge_id = $1 order by position asc',
         [challenge.id]
       );
 
       const correct = challengeAnswerMatches(parsedAnswer.value, sealed?.answer_hash ?? '', {
         caseSensitive: Boolean(sealed?.case_sensitive),
+        extraHashes: alternates.map((a) => a.answer_hash),
       });
 
       let ciphertext;
@@ -434,7 +533,7 @@ export async function archiveRoutes(app, { db, config, balanceReader }) {
           challenge.id,
           request.user.id,
           state.attempts + 1,
-          wallet.address,
+          wallet?.address ?? 'no-wallet-required',
           ciphertext,
           digest,
           correct ? 'correct' : 'incorrect',
@@ -453,7 +552,7 @@ export async function archiveRoutes(app, { db, config, balanceReader }) {
             request.user.id,
             file.id,
             `Submitted a correct answer for ${fileLabel(file.file_number)} — ${file.title}`,
-            JSON.stringify({ fileNumber: Number(file.file_number) }),
+            JSON.stringify({ fileNumber: Number(file.file_number), step: challenge.position }),
           ]
         );
       }
