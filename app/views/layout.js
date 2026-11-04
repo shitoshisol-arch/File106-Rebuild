@@ -1,12 +1,9 @@
-// Shared chrome for every server-rendered page. Reuses the trust page's
-// design tokens from site/styles.css so the archive reads as the same product.
+// Shared chrome for every server-rendered page, matching the File106-Rebuild
+// visual identity (8_* F/106 brand mark, dark panels, red warning accents).
 
 import { html, raw } from '../lib/html.js';
 import { csrfField } from '../lib/csrf.js';
 
-// `nav` and `terminalLabel` let the archivist terminal reuse this chrome without
-// pretending to be a participant page: there is no SIGN IN link on a screen the
-// public cannot reach, and the header says which terminal you are on.
 export function page({
   title,
   body,
@@ -26,50 +23,49 @@ export function page({
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${title}</title>
-  <meta name="theme-color" content="#080a0c">
+  <meta name="theme-color" content="#08090b">
   <meta name="robots" content="noindex">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <div class="noise" aria-hidden="true"></div>
   <a class="skip" href="#main">Skip to content</a>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="FILE106 home">
+      <span class="brand-mark">8_*</span>
+      <span>F<span class="red">/</span>106</span>
+      <span class="system-state" style="margin-left:10px;font-size:10px;"><i></i> THE FILE106 ARCHIVE / ${terminal}</span>
+    </a>
+    <nav class="topbar-actions archive-nav" aria-label="Archive">
+      <a href="/">HOME</a>
+      <a href="/archive">SECRET VAULT</a>
+      ${nav
+        ? nav
+        : signedIn
+          ? html`<a href="/dashboard">MY ARCHIVE</a>
+              <form method="post" action="/logout" class="nav-form">
+                ${csrf}
+                <button type="submit" class="nav-button">SIGN OUT</button>
+              </form>`
+          : html`<a href="/login">SIGN IN</a><a href="/register">REGISTER</a>`}
+    </nav>
+  </header>
+
   <div class="wrap">
-    <header class="topbar">
-      <div class="topbar-left">
-        <span class="live-dot" aria-hidden="true"></span>
-        <span>THE FILE106 ARCHIVE</span>
-        <span class="sep">/</span>
-        <span>${terminal}</span>
-      </div>
-      <nav class="topbar-right archive-nav" aria-label="Archive">
-        <a href="/">HOME</a>
-        ${nav
-          ? nav
-          : signedIn
-            ? html`<a href="/dashboard">MY ARCHIVE</a>
-                <form method="post" action="/logout" class="nav-form">
-                  ${csrf}
-                  <button type="submit" class="nav-button">SIGN OUT</button>
-                </form>`
-            : html`<a href="/login">SIGN IN</a><a href="/register">REGISTER</a>`}
-      </nav>
-    </header>
-
     <main id="main">${body}</main>
-
-    <footer>
-      <div class="footer-top">
-        <span>FILE106 / F106 · THE ARCHIVE</span>
-        <span class="sep">/</span>
-        <a href="/">Trust page</a>
-      </div>
-      <p>
-        This terminal answers ${signedInName ? 'signed-in participants' : 'public visitors'} only.
-        Sessions use a single first-party cookie; there are no trackers or third-party scripts.
-        Rewards are paid manually by the archive after on-chain verification — never automatically.
-      </p>
-    </footer>
   </div>
+
+  <footer>
+    <a class="brand" href="/"><span class="brand-mark">8_*</span><span>F<span class="red">/</span>106</span></a>
+    <p>PROJECT105: TERMINATED. FILE106: STILL ACTIVE.</p>
+    <p class="disclaimer">
+      This terminal answers ${signedInName ? 'signed-in participants' : 'public visitors'} only.
+      Sessions use a single first-party cookie; there are no trackers or third-party scripts.
+      Rewards are paid manually by the archive after on-chain verification — never automatically.
+    </p>
+    <span class="footer-code">FILE106 / F106 · THE ARCHIVE // 8_*</span>
+  </footer>
   ${scripts.map((src) => html`<script src="${src}" defer></script>`)}
 </body>
 </html>`;
