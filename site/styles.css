@@ -1047,3 +1047,31 @@ html[data-theme="light"] nav.mobile-nav{
 }
 html[data-theme="light"] .mobile-nav-links a{color:#5c564b}
 html[data-theme="light"] .mobile-nav-links a:hover,html[data-theme="light"] .mobile-nav-links a:focus-visible{color:#b3271e}
+
+/* Normal (light) mode readability: the base story stylesheet was written for
+   a dark page, so text that sat on the dark background needs its light-mode
+   counterpart. Inset "terminal" panels stay dark on purpose. */
+html[data-theme="light"] nav{color:var(--muted)}
+html[data-theme="light"] .statusline{color:var(--muted)}
+html[data-theme="light"] .statusline b{color:var(--text)}
+html[data-theme="light"] .hero-sub{color:var(--muted)}
+html[data-theme="light"] .text-link{color:var(--muted)}
+html[data-theme="light"] .story-copy{color:var(--muted)}
+html[data-theme="light"] .story-copy strong{color:var(--text)}
+html[data-theme="light"] .evidence strong{color:var(--text)}
+html[data-theme="light"] .symbol-content>p:not(.eyebrow){color:var(--muted)}
+html[data-theme="light"] .symbol-quote{color:var(--text)!important}
+html[data-theme="light"] .section-heading>p{color:var(--muted)}
+html[data-theme="light"] .file-row.available:hover{background:var(--panel-2)}
+html[data-theme="light"] .log-title{color:var(--text)}
+html[data-theme="light"] .discovery-log li{color:var(--muted);border-top-color:var(--line)}
+html[data-theme="light"] .reward-panel p:not(.eyebrow){color:var(--muted)}
+html[data-theme="light"] .reward-side{background:var(--panel);border-color:var(--line)}
+html[data-theme="light"] .reward-side strong{color:var(--text)}
+html[data-theme="light"] .mint-box{background:var(--panel);border-color:var(--line)}
+html[data-theme="light"] .modal-card{background:var(--panel);border-color:var(--line-strong)}
+html[data-theme="light"] .modal-card h2{color:var(--text)}
+html[data-theme="light"] .button:hover{color:var(--red)}
+html[data-theme="light"] .token-links a:hover{color:var(--text)}
+html[data-theme="light"] .hero-side{border-color:var(--line-strong)}
+html[data-theme="light"] .hero-symbol{border-color:var(--line-strong)}

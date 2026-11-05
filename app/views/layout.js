@@ -26,7 +26,8 @@ export function page({
   <meta name="theme-color" content="#08090b">
   <meta name="robots" content="noindex">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=3">
+  <link rel="stylesheet" href="/styles.css?v=4">
+  <script src="/theme.js?v=2"></script>
 </head>
 <body>
   <div class="noise" aria-hidden="true"></div>
@@ -73,7 +74,7 @@ export function page({
     </div>
     <a class="buy-now" href="https://jup.ag/swap/SOL-Ha6cqBCf5rCcka3M1BNK46BeBbZFbq5Mq1KgAjCmFiLE" target="_blank" rel="noopener" aria-label="Buy F106 on Jupiter">BUY F106 NOW ↗</a>
   </nav>
-  ${[...scripts, '/theme.js'].map((src) => html`<script src="${src}" defer></script>`)}
+  ${scripts.map((src) => html`<script src="${src}" defer></script>`)}
 </body>
 </html>`;
 }
