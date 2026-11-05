@@ -26,13 +26,14 @@ export function page({
   <meta name="theme-color" content="#08090b">
   <meta name="robots" content="noindex">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=6">
+  <link rel="stylesheet" href="/styles.css?v=7">
   <script src="/theme.js?v=2"></script>
 </head>
 <body>
   <div class="noise" aria-hidden="true"></div>
   <a class="skip" href="#main">Skip to content</a>
   <header class="topbar">
+    <button class="menu-toggle" type="button" data-menu-toggle aria-label="Open navigation menu" aria-expanded="false" aria-controls="siteMenu"><span></span><span></span><span></span></button>
     <a class="brand" href="/" aria-label="FILE106 home">
       <span class="brand-mark">8_*</span>
       <span>F<span class="red">/</span>106</span>
@@ -68,14 +69,19 @@ export function page({
     </p>
     <span class="footer-code">FILE106 / F106 · THE ARCHIVE // 8_*</span>
   </footer>
-  <nav class="mobile-nav" aria-label="Mobile navigation">
+  <nav class="mobile-nav" id="siteMenu" aria-label="Mobile navigation" aria-hidden="true">
+    <div class="mobile-nav-head">
+      <a class="brand" href="/" aria-label="FILE106 home"><span class="brand-mark">8_*</span><span>F<span class="red">/</span>106</span></a>
+      <button class="menu-close" type="button" data-menu-close aria-label="Close navigation menu">×</button>
+    </div>
     <div class="mobile-nav-links">
       <a href="/">HOME</a><a href="/archive">SECRET VAULT</a><a href="/investigate">INVESTIGATE</a>${signedIn ? html`<a href="/dashboard">MY ARCHIVE</a>` : html`<a href="/login">SIGN IN</a>`}
       <button class="mobile-theme" type="button" data-theme-toggle aria-label="Switch between night and normal mode"><span aria-hidden="true">◐</span><span data-theme-label>DAY</span></button>
     </div>
     <a class="buy-now" href="https://jup.ag/swap/SOL-Ha6cqBCf5rCcka3M1BNK46BeBbZFbq5Mq1KgAjCmFiLE" target="_blank" rel="noopener" aria-label="Buy F106 on Jupiter">BUY F106 NOW ↗</a>
   </nav>
-  ${scripts.map((src) => html`<script src="${src}" defer></script>`)}
+  <div class="menu-scrim" data-menu-close aria-hidden="true"></div>
+  ${['/menu.js', ...scripts].map((src) => html`<script src="${src}" defer></script>`)}
 </body>
 </html>`;
 }
