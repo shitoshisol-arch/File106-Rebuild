@@ -78,7 +78,7 @@ export function page({
       <a href="/">HOME</a><a href="/archive">SECRET VAULT</a><a href="/investigate">INVESTIGATE</a>${signedIn ? html`<a href="/dashboard">MY ARCHIVE</a>` : html`<a href="/login">SIGN IN</a>`}
       <button class="mobile-theme" type="button" data-theme-toggle aria-label="Switch between night and normal mode"><span aria-hidden="true">◐</span><span data-theme-label>DAY</span></button>
     </div>
-    <a class="buy-now" href="https://jup.ag/swap/SOL-Ha6cqBCf5rCcka3M1BNK46BeBbZFbq5Mq1KgAjCmFiLE" target="_blank" rel="noopener" aria-label="Buy F106 on Jupiter">BUY F106 NOW ↗</a>
+    <a class="buy-now" href="https://dexscreener.com/solana/HVpCVM92m6TkJpXpnudWEDZbjq5ucLJvJuJZAzSZhqtB" target="_blank" rel="noopener" aria-label="View the F106 chart on DexScreener">CHART ↗</a>
   </nav>
   <div class="menu-scrim" data-menu-close aria-hidden="true"></div>
   ${['/menu.js', ...scripts].map((src) => html`<script src="${src}" defer></script>`)}
