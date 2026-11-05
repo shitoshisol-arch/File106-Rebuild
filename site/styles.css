@@ -1075,3 +1075,52 @@ html[data-theme="light"] .button:hover{color:var(--red)}
 html[data-theme="light"] .token-links a:hover{color:var(--text)}
 html[data-theme="light"] .hero-side{border-color:var(--line-strong)}
 html[data-theme="light"] .hero-symbol{border-color:var(--line-strong)}
+
+/* Theme-aware native form controls (Control Room, sign-in, settings). */
+html{color-scheme:dark}
+html[data-theme="light"]{color-scheme:light}
+
+.wrap input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="submit"]):not([type="button"]),
+.wrap select,
+.wrap textarea {
+  background:var(--panel);
+  border:1px solid var(--line-strong);
+  color:var(--text);
+  padding:10px 12px;
+  border-radius:0;
+}
+.wrap input::placeholder,
+.wrap textarea::placeholder{color:var(--dim);opacity:1}
+.wrap input:focus,
+.wrap select:focus,
+.wrap textarea:focus{outline:1px solid var(--red);outline-offset:0;border-color:var(--red)}
+
+/* Mobile chrome: the bottom bar owns navigation, the theme switch and BUY.
+   Hide the duplicate desktop controls so phones never scroll sideways. */
+@media(max-width:720px){
+  .topbar .theme-toggle,
+  .topbar-actions .chart-link,
+  .topbar-actions .buy-now{display:none}
+  .mobile-nav-links .mobile-theme{
+    flex:none;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:9px 11px;
+    border:1px solid transparent;
+    background:none;
+    color:#aaa;
+    font:10px var(--mono);
+    letter-spacing:.12em;
+    white-space:nowrap;
+    cursor:pointer;
+  }
+  .mobile-nav-links .mobile-theme:hover,
+  .mobile-nav-links .mobile-theme:focus-visible{color:var(--red);outline:none}
+}
+@media(max-width:620px){
+  .mobile-nav-links .mobile-theme{padding:8px 9px;font-size:9px}
+}
+html[data-theme="light"] .mobile-nav-links .mobile-theme{color:#5c564b}
+html[data-theme="light"] .mobile-nav-links .mobile-theme:hover,
+html[data-theme="light"] .mobile-nav-links .mobile-theme:focus-visible{color:#b3271e}
