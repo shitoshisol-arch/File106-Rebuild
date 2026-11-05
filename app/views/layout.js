@@ -26,7 +26,7 @@ export function page({
   <meta name="theme-color" content="#08090b">
   <meta name="robots" content="noindex">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=2">
+  <link rel="stylesheet" href="/styles.css?v=3">
 </head>
 <body>
   <div class="noise" aria-hidden="true"></div>
@@ -67,6 +67,12 @@ export function page({
     </p>
     <span class="footer-code">FILE106 / F106 · THE ARCHIVE // 8_*</span>
   </footer>
+  <nav class="mobile-nav" aria-label="Mobile navigation">
+    <div class="mobile-nav-links">
+      <a href="/">HOME</a><a href="/archive">SECRET VAULT</a><a href="/investigate">INVESTIGATE</a>${signedIn ? html`<a href="/dashboard">MY ARCHIVE</a>` : html`<a href="/login">SIGN IN</a>`}
+    </div>
+    <a class="buy-now" href="https://jup.ag/swap/SOL-Ha6cqBCf5rCcka3M1BNK46BeBbZFbq5Mq1KgAjCmFiLE" target="_blank" rel="noopener" aria-label="Buy F106 on Jupiter">BUY F106 NOW ↗</a>
+  </nav>
   ${[...scripts, '/theme.js'].map((src) => html`<script src="${src}" defer></script>`)}
 </body>
 </html>`;

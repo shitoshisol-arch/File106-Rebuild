@@ -1000,3 +1000,50 @@ html[data-theme="light"] .skip{background:var(--red);color:#fff}
 html[data-theme="light"] a:hover{color:var(--red)}
 html[data-theme="light"] .theme-toggle,html[data-theme="light"] .chart-link{border-color:#b9b2a2;color:#5c564b}
 html[data-theme="light"] .theme-toggle:hover,html[data-theme="light"] .chart-link:hover{border-color:var(--red);color:#b3271e}
+
+/* ==================================================================== */
+/* MOBILE BOTTOM NAV BAR (phones) - links on top, BUY F106 NOW below    */
+/* ==================================================================== */
+
+.mobile-nav{display:none}
+
+@media(max-width:720px){
+  /* The blanket 'nav{display:none}' rule above also hides the Control Room
+     nav on phones. Un-hide it: the terminal must stay usable on mobile. */
+  nav.admin-nav{display:flex}
+
+  nav.mobile-nav{
+    display:flex;flex-direction:column;gap:8px;
+    position:fixed;left:0;right:0;bottom:0;z-index:40;
+    background:rgba(8,9,11,.96);
+    -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+    border-top:1px solid var(--line);
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
+  }
+  .mobile-nav-links{
+    display:flex;gap:2px;align-items:center;
+    overflow-x:auto;-webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .mobile-nav-links::-webkit-scrollbar{display:none}
+  .mobile-nav-links a{
+    flex:none;padding:9px 11px;
+    font:10px var(--mono);letter-spacing:.12em;
+    color:#aaa;border:1px solid transparent;white-space:nowrap;
+  }
+  .mobile-nav-links a:hover,.mobile-nav-links a:focus-visible{color:var(--red);outline:none}
+  .mobile-nav .buy-now{width:100%;justify-content:center;min-height:42px}
+  body{padding-bottom:132px}
+}
+
+@media(max-width:620px){
+  .mobile-nav-links a{padding:8px 9px;font-size:9px}
+  body{padding-bottom:124px}
+}
+
+html[data-theme="light"] nav.mobile-nav{
+  background:rgba(244,241,234,.96);
+  border-top:1px solid var(--line);
+}
+html[data-theme="light"] .mobile-nav-links a{color:#5c564b}
+html[data-theme="light"] .mobile-nav-links a:hover,html[data-theme="light"] .mobile-nav-links a:focus-visible{color:#b3271e}
