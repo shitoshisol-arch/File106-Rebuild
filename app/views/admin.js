@@ -1,7 +1,15 @@
 import { html, raw } from '../lib/html.js';
 import { csrfField } from '../lib/csrf.js';
 import { dateLabel, dateTimeLabel } from '../lib/format.js';
-import { DIFFICULTIES, FILE_STATUSES, FILE_TYPES, PUZZLE_TYPES, WINNER_METHODS } from '../lib/validate.js';
+import {
+  DIFFICULTIES,
+  FILE_STATUSES,
+  FILE_TYPES,
+  PUZZLE_TYPES,
+  REQUIREMENT_KINDS,
+  REQUIREMENT_PLATFORMS,
+  WINNER_METHODS,
+} from '../lib/validate.js';
 import { page, notice, errorList } from './layout.js';
 import { STATUS_COPY } from './archive.js';
 
@@ -30,6 +38,7 @@ export function adminShell({ admin, active, body }) {
         <a href="/admin/rewards" ${active === 'rewards' ? raw('aria-current="page"') : raw('')}>REWARDS</a>
         <a href="/admin/investigators" ${active === 'investigators' ? raw('aria-current="page"') : raw('')}>INVESTIGATORS</a>
         <a href="/admin/submissions" ${active === 'submissions' ? raw('aria-current="page"') : raw('')}>SUBMISSIONS</a>
+        <a href="/admin/verifications" ${active === 'verifications' ? raw('aria-current="page"') : raw('')}>CONDITIONS</a>
         <a href="/admin/settings" ${active === 'settings' ? raw('aria-current="page"') : raw('')}>SETTINGS</a>
         <a href="/admin/audit" ${active === 'audit' ? raw('aria-current="page"') : raw('')}>AUDIT LOG</a>
         <a href="/admin/team" ${active === 'team' ? raw('aria-current="page"') : raw('')}>TEAM</a>
@@ -340,6 +349,7 @@ export function adminFileEditorPage({
   challenge = null,
   puzzles = [],
   attachments = [],
+  requirements = [],
   errors = {},
   values = {},
   message = '',
@@ -574,6 +584,65 @@ export function adminFileEditorPage({
               <span>Case sensitive</span>
             </label>
             <button class="btn ghost" type="submit">ADD / UPDATE PUZZLE STEP</button>
+          </form>
+        </div>
+
+        <div class="admin-panel" id="conditions">
+          <p class="eyebrow">REWARD CONDITIONS / PARTNER TASKS</p>
+          <p class="fine">
+            Tasks a participant must complete before this file's reward can be approved — for
+            example following a partner account. The participant sees a green check only after
+            an archivist verifies their submitted proof in the
+            <a href="/admin/verifications">CONDITIONS</a> queue; until then the check stays red.
+          </p>
+
+          ${requirements.length > 0
+            ? html`<table class="admin-table" style="margin-bottom:1rem;">
+                <thead><tr><th>#</th><th>Condition</th><th>Partner target</th><th>Reviews</th><th></th></tr></thead>
+                <tbody>
+                  ${requirements.map(
+                    (r) => html`<tr>
+                      <td class="mono">${r.position}</td>
+                      <td>
+                        <strong>${r.title}</strong>${r.is_required ? '' : ' <span class="fine">(OPTIONAL)</span>'}<br>
+                        <span class="fine">${r.description || r.kind}</span>
+                      </td>
+                      <td class="mono">
+                        ${r.platform}<br>
+                        <a href="${r.target_url}" target="_blank" rel="noopener noreferrer">${r.target_url}</a><br>
+                        ${r.target_handle || ''}
+                      </td>
+                      <td class="mono">
+                        ${r.verified} ✓ · ${r.pending} … · ${r.rejected} ✕
+                      </td>
+                      <td>
+                        <form method="post" action="/admin/files/${file.id}/requirements/${r.id}/delete" class="inline-form" data-confirm="Remove this condition and its pending proofs?">
+                          ${csrfField({ csrf })}
+                          <button type="submit" class="nav-button">DELETE</button>
+                        </form>
+                      </td>
+                    </tr>`
+                  )}
+                </tbody>
+              </table>`
+            : html`<p class="fine">No conditions on this file. The reward follows the answer alone.</p>`}
+
+          <form method="post" action="/admin/files/${file.id}/requirements" class="admin-form">
+            ${csrfField({ csrf })}
+            ${textField({ name: 'title', label: 'CONDITION TITLE', value: '', hint: 'What the participant must do, e.g. "Follow our partner on X".' })}
+            <div class="field-row">
+              ${selectField({ name: 'platform', label: 'PLATFORM', options: REQUIREMENT_PLATFORMS, value: 'x' })}
+              ${selectField({ name: 'kind', label: 'CONDITION TYPE', options: REQUIREMENT_KINDS, value: 'social_follow' })}
+              ${textField({ name: 'position', label: 'POSITION (1-20)', type: 'number', value: '', required: false, hint: 'Blank appends after the last one.' })}
+            </div>
+            ${textField({ name: 'targetUrl', label: 'PARTNER LINK (HTTPS)', value: '', hint: 'The exact URL the participant must open or follow.' })}
+            ${textField({ name: 'targetHandle', label: 'PARTNER HANDLE', value: '', required: false, hint: 'Shown beside the link, e.g. @file106.' })}
+            ${textArea({ name: 'description', label: 'INSTRUCTIONS (OPTIONAL)', value: '', rows: 2, hint: 'Short public instructions under the condition title.' })}
+            <label class="field field-check">
+              <input type="checkbox" name="isRequired" value="1" checked>
+              <span>Required — the reward is blocked until this is verified</span>
+            </label>
+            <button class="btn ghost" type="submit">ADD REWARD CONDITION</button>
           </form>
         </div>
 

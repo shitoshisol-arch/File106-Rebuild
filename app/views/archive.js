@@ -119,6 +119,91 @@ function checkRow(ok, label, detail) {
   </li>`;
 }
 
+// The four states a reward condition can be in for the viewer. A green check
+// exists only for status 'verified', which the database refuses to store
+// without an archivist and a check time. 'missing' and 'rejected' both render
+// red: the task is not done as far as the archive is concerned.
+const REQUIREMENT_STATE = {
+  verified: { mark: '✓', label: 'VERIFIED' },
+  pending: { mark: '…', label: 'UNDER REVIEW' },
+  rejected: { mark: '×', label: 'NOT ACCEPTED' },
+  missing: { mark: '×', label: 'NOT DONE' },
+};
+
+function requirementRow({ file, item, csrf, signedIn }) {
+  const state = REQUIREMENT_STATE[item.status] ?? REQUIREMENT_STATE.missing;
+  const platform = String(item.platform).toUpperCase();
+
+  let status;
+  if (item.status === 'verified') {
+    status = html`<p class="requirement-note ok">
+      ✓ Verified by the archive${item.checkedAt ? ` on ${dateLabel(item.checkedAt)}` : ''}.
+      This task is complete.
+    </p>`;
+  } else if (item.status === 'pending') {
+    status = html`<p class="requirement-note wait">
+      Proof on file: <span class="mono">${item.proof}</span> — an archivist is reviewing it.
+    </p>`;
+  } else if (!signedIn) {
+    status = html`<p class="fine">
+      <a href="/login">Sign in</a> to complete this condition and submit proof.
+    </p>`;
+  } else {
+    status = html`
+      ${item.status === 'rejected' && item.reviewerNote
+        ? html`<p class="requirement-note bad">Reviewer note: ${item.reviewerNote}</p>`
+        : raw('')}
+      <form method="post" action="/archive/${file.slug}/requirements/${item.id}/proof" class="requirement-proof">
+        <input type="hidden" name="csrf" value="${csrf}">
+        <label class="field">
+          <span class="field-label">${platform} HANDLE OR PROOF LINK</span>
+          <input class="field-input" type="text" name="proof" maxlength="300" autocomplete="off" spellcheck="false" required>
+          <span class="field-hint">The account that completed the task, or a link showing it.</span>
+        </label>
+        <button class="btn primary" type="submit">SUBMIT PROOF</button>
+      </form>`;
+  }
+
+  return html`<li class="requirement-item" data-state="${item.status}">
+    <span class="requirement-mark" aria-hidden="true">${state.mark}</span>
+    <div class="requirement-body">
+      <p class="requirement-title">
+        <strong>${item.title}</strong>
+        <span class="requirement-state">${state.label}</span>
+        ${item.required ? raw('') : html`<span class="fine">OPTIONAL</span>`}
+      </p>
+      ${item.description ? html`<p class="fine">${item.description}</p>` : raw('')}
+      <p class="requirement-target">
+        <a class="btn ghost" href="${item.targetUrl}" target="_blank" rel="noopener noreferrer">OPEN ${platform} LINK ↗</a>
+        ${item.targetHandle ? html`<span class="mono fine">${item.targetHandle}</span>` : raw('')}
+      </p>
+      ${status}
+    </div>
+  </li>`;
+}
+
+function requirementsPanel({ file, eligibility, requirements, csrf }) {
+  if (!requirements || requirements.length === 0) return raw('');
+
+  const verified = requirements.filter((item) => item.status === 'verified').length;
+  const allDone = requirements.every((item) => item.status === 'verified');
+
+  return html`<div class="requirements-panel">
+    <p class="eyebrow">REWARD CONDITIONS</p>
+    <h2>${allDone ? 'ALL CONDITIONS MET' : `${verified} OF ${requirements.length} VERIFIED`}</h2>
+    <p class="fine">
+      ${file.rewardsEnabled === false
+        ? 'This file carries partner conditions even though its F106 reward is off.'
+        : `The ${file.reward} F106 reward for this file is released only after every required
+           condition below carries a green check and the archivist approves the answer.`}
+      A green check is set by the archive after your proof is reviewed — never by clicking.
+    </p>
+    <ul class="requirements">
+      ${requirements.map((item) => requirementRow({ file, item, csrf, signedIn: eligibility.signedIn }))}
+    </ul>
+  </div>`;
+}
+
 function sealedPanel({ file, csrf }) {
   const copy = LOCK_COPY[file.lockReason] || LOCK_COPY.missing;
 
@@ -300,6 +385,7 @@ export function archiveFilePage({
   eligibility,
   challenge = null,
   puzzles = [],
+  requirements = [],
   submission = { attempts: 0, remaining: 0, hasCorrect: false },
   csrf = '',
   message = '',
@@ -357,6 +443,8 @@ export function archiveFilePage({
           </div>`
         : raw('')}
 
+      ${requirementsPanel({ file, eligibility, requirements, csrf })}
+
       ${locked
         ? sealedPanel({ file, csrf })
         : html`
@@ -388,5 +476,11 @@ export function archiveFilePage({
       </p>
     </section>`;
 
-  return page({ title: `FILE106 — ${file.title}`, body, session, scripts: ['/mystery.js'] });
+  return page({
+    title: `FILE106 — ${file.title}`,
+    body,
+    session,
+    signedIn: eligibility.signedIn,
+    scripts: ['/mystery.js'],
+  });
 }

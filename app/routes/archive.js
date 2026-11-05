@@ -22,6 +22,7 @@ import { parseUnits } from '../lib/solana.js';
 import {
   messageText,
   validateAnswerSubmission,
+  validateProofInput,
   validateUnlockCode,
 } from '../lib/validate.js';
 import { redirect, sendPage } from '../lib/reply.js';
@@ -113,6 +114,36 @@ async function loadChallenges(db, fileId) {
       order by position asc`,
     [fileId]
   );
+}
+
+async function loadFileRequirements(db, fileId, userId) {
+  const rows = await db.many(
+    `select r.id, r.position, r.kind, r.platform, r.title, r.description,
+            r.target_url, r.target_handle, r.is_required,
+            v.status as verification_status, v.proof, v.reviewer_note, v.checked_at
+       from file_requirements r
+       left join file_requirement_verifications v
+         on v.requirement_id = r.id and v.user_id = $2::uuid
+      where r.file_id = $1
+      order by r.position asc, r.created_at asc`,
+    [fileId, userId ?? null]
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    position: row.position,
+    kind: row.kind,
+    platform: row.platform,
+    title: row.title,
+    description: row.description || '',
+    targetUrl: row.target_url,
+    targetHandle: row.target_handle || '',
+    required: row.is_required !== false,
+    status: row.verification_status || 'missing',
+    proof: row.proof || '',
+    reviewerNote: row.reviewer_note || '',
+    checkedAt: row.checked_at,
+  }));
 }
 
 async function submissionState(db, userId, challenge) {
@@ -258,6 +289,8 @@ export async function archiveRoutes(app, { db, config, uploads, balanceReader })
       });
     }
 
+    const requirements = await loadFileRequirements(db, file.id, user?.id);
+
     const view = {
       number: file.file_number,
       slug: file.slug,
@@ -329,6 +362,7 @@ export async function archiveRoutes(app, { db, config, uploads, balanceReader })
         eligibility,
         challenge: view.locked ? null : challenge,
         puzzles: view.locked ? [] : puzzleStates,
+        requirements,
         submission: state,
         csrf: csrfToken(request.session),
         message: messageText(String(request.query?.notice ?? '')),
@@ -397,6 +431,86 @@ export async function archiveRoutes(app, { db, config, uploads, balanceReader })
       });
 
       return redirect(reply, `/archive/${slug}?notice=file-unlocked`);
+    }
+  );
+
+  // -------------------------------------------------------------------
+  // Reward conditions: the participant submits proof for one condition
+  // -------------------------------------------------------------------
+  app.post(
+    '/archive/:slug/requirements/:requirementId/proof',
+    { config: { rateLimit: { max: 20, timeWindow: '5 minutes' } } },
+    async (request, reply) => {
+      const slug = String(request.params.slug ?? '');
+      if (!SLUG.test(slug)) return reply.callNotFound();
+
+      if (!request.user) return redirect(reply, '/login?notice=login-required');
+
+      const file = await db.one(
+        `select id, slug, file_number, title from files
+          where slug = $1 and is_enabled and status = any($2::text[])`,
+        [slug, PUBLIC_STATUSES]
+      );
+      if (!file) return reply.callNotFound();
+
+      const requirementId = String(request.params.requirementId ?? '');
+      if (!UUID.test(requirementId)) {
+        return redirect(reply, `/archive/${slug}?notice=requirement-unknown`);
+      }
+
+      const requirement = await db.one(
+        'select id, title from file_requirements where id = $1 and file_id = $2',
+        [requirementId, file.id]
+      );
+      if (!requirement) return redirect(reply, `/archive/${slug}?notice=requirement-unknown`);
+
+      // A verified condition is closed: no participant input can reopen or
+      // rewrite it. Only an archivist decision changes it again.
+      const existing = await db.one(
+        `select id, status from file_requirement_verifications
+          where requirement_id = $1 and user_id = $2`,
+        [requirement.id, request.user.id]
+      );
+      if (existing?.status === 'verified') {
+        return redirect(reply, `/archive/${slug}?notice=proof-locked`);
+      }
+
+      const parsed = validateProofInput(request.body?.proof);
+      if (parsed.error) return redirect(reply, `/archive/${slug}?notice=proof-required`);
+
+      // The row is born 'pending' with the proof. Nothing in this handler can
+      // produce 'verified': that transition lives with the archivist review
+      // route and the database check that demands checked_at and reviewed_by.
+      if (existing) {
+        await db.query(
+          `update file_requirement_verifications
+              set status = 'pending', proof = $2, method = 'manual_review',
+                  reviewed_by = null, checked_at = null, reviewer_note = '',
+                  updated_at = now()
+            where id = $1`,
+          [existing.id, parsed.value]
+        );
+      } else {
+        await db.query(
+          `insert into file_requirement_verifications
+             (requirement_id, file_id, user_id, status, proof, method)
+           values ($1, $2, $3, 'pending', $4, 'manual_review')`,
+          [requirement.id, file.id, request.user.id, parsed.value]
+        );
+      }
+
+      await db.query(
+        `insert into investigation_logs (user_id, entry_type, file_id, message, metadata)
+         values ($1, 'requirement', $2, $3, $4::jsonb)`,
+        [
+          request.user.id,
+          file.id,
+          `Submitted proof for the reward condition: ${requirement.title}`,
+          JSON.stringify({ requirementId: requirement.id, proof: parsed.value }),
+        ]
+      );
+
+      return redirect(reply, `/archive/${slug}?notice=proof-submitted`);
     }
   );
 

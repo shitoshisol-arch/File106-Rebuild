@@ -269,7 +269,15 @@ export function adminSubmissionsPage({ admin, submissions = [], counts = {}, sta
   return adminResult(admin, 'submissions', 'SUBMISSIONS', body);
 }
 
-export function adminSubmissionPage({ admin, submission, answer = '', answerError = '', outcome = null, message = '' }) {
+export function adminSubmissionPage({
+  admin,
+  submission,
+  answer = '',
+  answerError = '',
+  outcome = null,
+  conditions = [],
+  message = '',
+}) {
   const pending = ['pending_review', 'correct'].includes(submission.status);
 
   const body = html`
@@ -319,6 +327,34 @@ export function adminSubmissionPage({ admin, submission, answer = '', answerErro
             ? html`<p class="fine mono break">TX ${outcome.signature}</p>
                 <p><a class="btn ghost" href="${outcome.explorer_url}" target="_blank" rel="noopener noreferrer">VIEW TRANSACTION</a></p>`
             : raw('')}
+        </div>`
+      : raw('')}
+
+    ${conditions.length > 0
+      ? html`<div class="admin-panel">
+          <p class="eyebrow">REWARD CONDITIONS FOR THIS PARTICIPANT</p>
+          <ul class="checklist">
+            ${conditions.map(
+              (c) => html`<li class="check-item" data-ok="${c.status === 'verified' ? 'yes' : 'no'}">
+                <span class="check-mark" aria-hidden="true">${c.status === 'verified' ? '✓' : '×'}</span>
+                <span>
+                  <strong>${c.title}</strong> <span class="fine">${c.platform}${c.is_required ? '' : ' · OPTIONAL'}</span><br>
+                  <span class="fine">
+                    ${c.status === 'verified'
+                      ? `Verified${c.checked_at ? ` on ${dateTimeLabel(c.checked_at)}` : ''}.`
+                      : c.status === 'pending'
+                        ? `Proof on file: ${c.proof} — still under review.`
+                        : c.status === 'rejected'
+                          ? `Rejected proof: ${c.proof}${c.reviewer_note ? ` — ${c.reviewer_note}` : ''}.`
+                          : 'No proof submitted yet.'}
+                    ${c.is_required && c.status !== 'verified'
+                      ? ' The reward is blocked until this is verified in the CONDITIONS queue.'
+                      : ''}
+                  </span>
+                </span>
+              </li>`
+            )}
+          </ul>
         </div>`
       : raw('')}
 

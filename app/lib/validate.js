@@ -127,6 +127,20 @@ export const MESSAGES = {
   'winner-duplicate': 'THIS WALLET HAS ALREADY WON THIS FILE.',
   'submission-not-pending': 'THAT SUBMISSION IS NOT AWAITING REVIEW.',
   'reward-recorded': 'REWARD RECORD CREATED.',
+  // Per-file reward conditions
+  'requirement-created': 'REWARD CONDITION ADDED. PARTICIPANTS SEE IT ON THE FILE.',
+  'requirement-deleted': 'REWARD CONDITION REMOVED.',
+  'requirement-unknown': 'NO SUCH REWARD CONDITION.',
+  'requirement-invalid': 'CHECK THE REWARD CONDITION FIELDS.',
+  'requirement-position-taken': 'THAT POSITION IS ALREADY USED BY ANOTHER CONDITION.',
+  'proof-submitted': 'PROOF SUBMITTED. AN ARCHIVIST WILL REVIEW IT BEFORE THE CHECK TURNS GREEN.',
+  'proof-required': 'ENTER THE HANDLE OR LINK THAT PROVES YOU COMPLETED THE TASK.',
+  'proof-locked': 'THIS CONDITION IS ALREADY VERIFIED AND CANNOT BE CHANGED.',
+  'verification-approved': 'CONDITION VERIFIED. THE PARTICIPANT NOW SEES A GREEN CHECK.',
+  'verification-rejected': 'CONDITION REJECTED. THE PARTICIPANT SEES A RED CHECK AND MAY RESUBMIT.',
+  'verification-unknown': 'NO SUCH PROOF RECORD.',
+  'verification-not-pending': 'THAT PROOF IS NOT AWAITING REVIEW.',
+  'requirements-incomplete': 'REWARD REFUSED: NOT EVERY REQUIRED CONDITION IS VERIFIED.',
   // Control room
   'file-deleted': 'FILE DELETED. THE AUDIT LOG KEEPS THE RECORD.',
   'file-delete-blocked': 'THIS FILE CANNOT BE DELETED: SUBMISSIONS OR REWARDS EXIST. ARCHIVE IT INSTEAD.',
@@ -708,4 +722,90 @@ export function validateAdminNote(value) {
   const note = normalizeText(value);
   if (note.length > 2000) return { error: 'Keep the note under 2000 characters.' };
   return { value: note };
+}
+
+// ---------------------------------------------------------------------
+// Per-file reward conditions
+// ---------------------------------------------------------------------
+
+export const REQUIREMENT_PLATFORMS = [
+  'x',
+  'telegram',
+  'discord',
+  'instagram',
+  'tiktok',
+  'youtube',
+  'website',
+  'other',
+];
+
+export const REQUIREMENT_KINDS = ['social_follow', 'visit_link', 'custom'];
+
+export function validateRequirementInput(body = {}) {
+  const errors = {};
+
+  const kind = normalizeText(body.kind) || 'social_follow';
+  if (!REQUIREMENT_KINDS.includes(kind)) errors.kind = 'Unknown condition type.';
+
+  const platform = normalizeText(body.platform).toLowerCase() || 'x';
+  if (!REQUIREMENT_PLATFORMS.includes(platform)) errors.platform = 'Unknown platform.';
+
+  const title = normalizeText(body.title);
+  if (!title) errors.title = 'Say what the participant must do.';
+  else if (title.length > 120) errors.title = 'Keep the condition title under 120 characters.';
+
+  const description = normalizeText(body.description);
+  if (description.length > 500) errors.description = 'Keep the description under 500 characters.';
+
+  // The link is opened by participants, so it must be an absolute HTTPS URL.
+  // A javascript: or data: scheme is refused before it can reach the page.
+  const targetUrl = normalizeText(body.targetUrl);
+  if (!targetUrl) {
+    errors.targetUrl = 'Paste the partner link participants must open.';
+  } else if (targetUrl.length > 500) {
+    errors.targetUrl = 'Keep the link under 500 characters.';
+  } else {
+    try {
+      const parsed = new URL(targetUrl);
+      if (parsed.protocol !== 'https:') errors.targetUrl = 'The link must start with https://';
+    } catch {
+      errors.targetUrl = 'That is not a valid URL.';
+    }
+  }
+
+  const targetHandle = normalizeText(body.targetHandle);
+  if (targetHandle.length > 100) errors.targetHandle = 'Keep the handle under 100 characters.';
+
+  const positionRaw = normalizeText(body.position);
+  let position = null;
+  if (positionRaw !== '') {
+    const parsed = Number.parseInt(positionRaw, 10);
+    if (!/^\d+$/.test(positionRaw) || parsed < 1 || parsed > 20) {
+      errors.position = 'Use a position between 1 and 20, or leave it blank.';
+    } else {
+      position = parsed;
+    }
+  }
+
+  return {
+    errors,
+    value: {
+      kind,
+      platform,
+      title,
+      description,
+      targetUrl,
+      targetHandle,
+      position,
+      isRequired: body.isRequired === undefined ? true : Boolean(body.isRequired),
+    },
+  };
+}
+
+export function validateProofInput(value) {
+  const proof = normalizeText(value);
+  if (!proof) return { error: 'Enter the handle or link that proves the task was completed.' };
+  if (proof.length < 2) return { error: 'That proof is too short.' };
+  if (proof.length > 300) return { error: 'Keep the proof under 300 characters.' };
+  return { value: proof };
 }

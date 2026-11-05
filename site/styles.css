@@ -434,6 +434,127 @@
   border-color: rgba(220, 80, 80, 0.5);
 }
 
+/* Per-file reward conditions. A condition is one partner task; the four
+   data-state values are the only states the server can produce. Green is
+   reserved for the verified state, which only an archivist review sets. */
+.requirements-panel {
+  margin: 32px 0;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.requirements {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.requirement-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: var(--panel-2, var(--panel));
+}
+
+.requirement-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line-strong);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.requirement-item[data-state="verified"] .requirement-mark {
+  color: var(--green);
+  border-color: rgba(80, 200, 120, 0.6);
+  background: rgba(80, 200, 120, 0.08);
+}
+
+.requirement-item[data-state="pending"] .requirement-mark {
+  color: var(--amber);
+  border-color: rgba(255, 200, 87, 0.5);
+  background: rgba(255, 200, 87, 0.07);
+}
+
+.requirement-item[data-state="rejected"] .requirement-mark,
+.requirement-item[data-state="missing"] .requirement-mark {
+  color: var(--red);
+  border-color: rgba(227, 74, 66, 0.6);
+  background: rgba(227, 74, 66, 0.07);
+}
+
+.requirement-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.requirement-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0;
+  font-size: 13px;
+}
+
+.requirement-state {
+  padding: 2px 8px;
+  border: 1px solid var(--line-strong);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.requirement-item[data-state="verified"] .requirement-state {
+  color: var(--green);
+  border-color: rgba(80, 200, 120, 0.4);
+}
+
+.requirement-item[data-state="pending"] .requirement-state {
+  color: var(--amber);
+  border-color: rgba(255, 200, 87, 0.4);
+}
+
+.requirement-item[data-state="rejected"] .requirement-state,
+.requirement-item[data-state="missing"] .requirement-state {
+  color: var(--red);
+  border-color: rgba(227, 74, 66, 0.4);
+}
+
+.requirement-target {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 10px 0 0;
+}
+
+.requirement-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.requirement-note.ok { color: var(--green); }
+.requirement-note.wait { color: var(--amber); }
+.requirement-note.bad { color: var(--red); }
+
+.requirement-proof {
+  display: grid;
+  gap: 10px;
+  max-width: 420px;
+  margin-top: 12px;
+}
+
 .archive-cta {
   display: flex;
   flex-wrap: wrap;

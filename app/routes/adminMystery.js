@@ -552,6 +552,19 @@ export async function registerMysteryAdminRoutes(
       [submission.id]
     );
 
+    // The reward conditions on this file, with this participant's state on
+    // each, so the archivist can see exactly what blocks approval.
+    const conditions = await db.many(
+      `select r.id, r.position, r.title, r.platform, r.is_required, r.target_url,
+              v.status, v.proof, v.reviewer_note, v.checked_at
+         from file_requirements r
+         left join file_requirement_verifications v
+           on v.requirement_id = r.id and v.user_id = $2
+        where r.file_id = $1
+        order by r.position asc`,
+      [submission.file_id, submission.user_id]
+    );
+
     return sendPage(
       reply,
       adminSubmissionPage({
@@ -560,6 +573,7 @@ export async function registerMysteryAdminRoutes(
         answer,
         answerError,
         outcome,
+        conditions,
         message: messageText(String(request.query?.notice ?? '')),
       })
     );
@@ -587,6 +601,29 @@ export async function registerMysteryAdminRoutes(
       [preview.file_id]
     );
     if (!file) return redirect(reply, '/admin/submissions?notice=submission-unknown');
+
+    // Reward-condition gate: every required condition on this file must carry
+    // a verified row for this participant before a reward can exist. The
+    // rewards_conditions_guard trigger repeats the check at insert time; this
+    // earlier refusal keeps the archivist inside the flow with a clear message.
+    const conditions = await db.one(
+      `select count(*) filter (where r.is_required)::int as required,
+              count(*) filter (
+                where r.is_required
+                  and v.status = 'verified'
+                  and v.checked_at is not null
+                  and v.reviewed_by is not null
+              )::int as verified
+         from file_requirements r
+         left join file_requirement_verifications v
+           on v.requirement_id = r.id and v.user_id = $2
+        where r.file_id = $1`,
+      [preview.file_id, preview.user_id]
+    );
+
+    if (Number(conditions?.required ?? 0) > Number(conditions?.verified ?? 0)) {
+      return redirect(reply, `/admin/submissions/${preview.id}?notice=requirements-incomplete`);
+    }
 
     // Fresh chain read at approval time. A wallet that no longer holds the
     // minimum does not get a reward record.
@@ -683,6 +720,14 @@ export async function registerMysteryAdminRoutes(
           ? 'winner-duplicate'
           : 'submission-not-pending';
         return redirect(reply, `/admin/submissions/${preview.id}?notice=${notice}`);
+      }
+      // The database trigger repeats the condition gate at insert time; a race
+      // that slipped past the check above still cannot create the reward.
+      if (
+        error.code === '23514' &&
+        String(error.message ?? '').includes('reward_conditions_incomplete')
+      ) {
+        return redirect(reply, `/admin/submissions/${preview.id}?notice=requirements-incomplete`);
       }
       throw error;
     }

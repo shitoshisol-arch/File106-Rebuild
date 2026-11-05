@@ -26,6 +26,7 @@ import {
   validateChallengeInput,
   validateFileInput,
   validateLogin,
+  validateRequirementInput,
 } from '../lib/validate.js';
 import {
   adminFileEditorPage,
@@ -36,6 +37,7 @@ import {
 import { adminFilePreviewPage } from '../views/controlRoom.js';
 import { registerControlRoomRoutes } from './controlRoom.js';
 import { registerMysteryAdminRoutes } from './adminMystery.js';
+import { registerRequirementAdminRoutes } from './adminRequirements.js';
 
 // A hash is always compared, even for an address that does not exist, so the
 // response time cannot be used to enumerate archivists.
@@ -528,6 +530,23 @@ export async function adminRoutes(app, { db, config, uploads, balanceReader, tra
       [file.id, file.cover_attachment_id]
     );
 
+    // Reward conditions with review counters, so the editor shows what is
+    // queued without leaving the file.
+    const requirements = await db.many(
+      `select r.id, r.position, r.kind, r.platform, r.title, r.description,
+              r.target_url, r.target_handle, r.is_required, r.created_at,
+              count(v.id)::int as verifications,
+              count(v.id) filter (where v.status = 'pending')::int as pending,
+              count(v.id) filter (where v.status = 'verified')::int as verified,
+              count(v.id) filter (where v.status = 'rejected')::int as rejected
+         from file_requirements r
+         left join file_requirement_verifications v on v.requirement_id = r.id
+        where r.file_id = $1
+        group by r.id
+        order by r.position asc, r.created_at asc`,
+      [file.id]
+    );
+
     // Owner-set defaults teach blank answer fields; typed values always win.
     const defaults = await db.many(
       "select key, value from settings where key = 'archive.default_min_holding'"
@@ -546,6 +565,7 @@ export async function adminRoutes(app, { db, config, uploads, balanceReader, tra
         },
         puzzles,
         attachments,
+        requirements,
         values: {
           ...editorValues({
             ...file,
@@ -952,6 +972,110 @@ export async function adminRoutes(app, { db, config, uploads, balanceReader, tra
   });
 
   // -------------------------------------------------------------------
+  // Reward conditions: the per-file partner tasks a participant must finish
+  // before a reward can be approved. The condition itself is public surface:
+  // title, link and handle only. Verification state lives in the review queue.
+  // -------------------------------------------------------------------
+
+  app.post('/admin/files/:id/requirements', async (request, reply) => {
+    const file = await loadFile(db, request.params.id);
+    if (!file) return redirect(reply, '/admin/files?notice=file-unknown');
+
+    const { errors, value } = validateRequirementInput(request.body || {});
+    if (Object.keys(errors).length > 0) {
+      return redirect(reply, `/admin/files/${file.id}?notice=requirement-invalid`);
+    }
+
+    // Blank position means "append after the last one".
+    const position = value.position ?? Number(
+      (await db.value(
+        'select coalesce(max(position), 0) + 1 as v from file_requirements where file_id = $1',
+        [file.id]
+      )) ?? 1
+    );
+
+    let created;
+    try {
+      created = await db.one(
+        `insert into file_requirements
+           (file_id, position, kind, platform, title, description,
+            target_url, target_handle, is_required, created_by)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         returning id, position`,
+        [
+          file.id,
+          position,
+          value.kind,
+          value.platform,
+          value.title,
+          value.description,
+          value.targetUrl,
+          value.targetHandle,
+          value.isRequired,
+          request.admin.id,
+        ]
+      );
+    } catch (error) {
+      // 23505: the position is taken by another condition on this file.
+      if (error.code === '23505') {
+        return redirect(reply, `/admin/files/${file.id}?notice=requirement-position-taken`);
+      }
+      throw error;
+    }
+
+    await audit(db, {
+      adminId: request.admin.id,
+      action: 'requirement.create',
+      entity: 'file_requirements',
+      entityId: created.id,
+      after: {
+        fileNumber: file.file_number,
+        position,
+        kind: value.kind,
+        platform: value.platform,
+        title: value.title,
+        targetUrl: value.targetUrl,
+        targetHandle: value.targetHandle,
+        isRequired: value.isRequired,
+      },
+      ip: ipHash(request),
+    });
+
+    request.log.info({ fileId: file.id, position }, 'reward condition added');
+    return redirect(reply, `/admin/files/${file.id}?notice=requirement-created`);
+  });
+
+  app.post('/admin/files/:id/requirements/:requirementId/delete', async (request, reply) => {
+    const file = await loadFile(db, request.params.id);
+    if (!file) return redirect(reply, '/admin/files?notice=file-unknown');
+
+    if (!UUID.test(String(request.params.requirementId))) {
+      return redirect(reply, `/admin/files/${file.id}?notice=requirement-unknown`);
+    }
+
+    const before = await db.one(
+      'select id, position, title, platform from file_requirements where id = $1 and file_id = $2',
+      [request.params.requirementId, file.id]
+    );
+    if (!before) return redirect(reply, `/admin/files/${file.id}?notice=requirement-unknown`);
+
+    // Deleting a condition removes its pending proofs with it (cascade), and
+    // the audit row keeps the record of what existed.
+    await db.query('delete from file_requirements where id = $1', [before.id]);
+
+    await audit(db, {
+      adminId: request.admin.id,
+      action: 'requirement.delete',
+      entity: 'file_requirements',
+      entityId: before.id,
+      before: { position: before.position, title: before.title, platform: before.platform },
+      ip: ipHash(request),
+    });
+
+    return redirect(reply, `/admin/files/${file.id}?notice=requirement-deleted`);
+  });
+
+  // -------------------------------------------------------------------
   // Lifecycle: duplicate, delete, reorder
   // -------------------------------------------------------------------
 
@@ -1003,6 +1127,18 @@ export async function adminRoutes(app, { db, config, uploads, balanceReader, tra
          join challenges nc on nc.file_id = $1 and nc.position = oc.position
         where oc.file_id = $2`,
       [copy.id, source.id]
+    );
+
+    // Reward conditions are part of the file's deal, so the copy carries them
+    // too. Participant proofs are not copied: they belong to the original file.
+    await db.query(
+      `insert into file_requirements
+         (file_id, position, kind, platform, title, description,
+          target_url, target_handle, is_required, created_by)
+       select $1, position, kind, platform, title, description,
+              target_url, target_handle, is_required, $2
+         from file_requirements where file_id = $3`,
+      [copy.id, request.admin.id, source.id]
     );
 
     await db.query(
@@ -1269,6 +1405,7 @@ export async function adminRoutes(app, { db, config, uploads, balanceReader, tra
   // audit, investigators, puzzle index) behave the same way.
   // -------------------------------------------------------------------
   await registerControlRoomRoutes(app, { db, config, withCsrf, audit });
+  await registerRequirementAdminRoutes(app, { db, withCsrf, audit });
   await registerMysteryAdminRoutes(app, {
     db,
     config,
