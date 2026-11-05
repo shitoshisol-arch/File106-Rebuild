@@ -501,7 +501,15 @@ export function adminFileEditorPage({
         </div>`}
 
     ${isNew
-      ? html`<p class="fine">Create the draft first; puzzles, sealed answers, and attachments appear on the next screen.</p>`
+      ? html`<div class="admin-panel">
+          <p class="eyebrow">AFTER YOU SAVE THIS DRAFT</p>
+          <p class="fine">
+            The editor screen that opens next carries everything this form does not:
+            puzzles and sealed answers, attachments, publication controls, and
+            <strong>REWARD CONDITIONS — the partner social-media links</strong>
+            participants must complete. Save the draft first, then add them there.
+          </p>
+        </div>`
       : html`<div class="admin-panel" id="puzzles">
           <p class="eyebrow">CHALLENGE / PUZZLE EDITOR</p>
           <p class="fine">
