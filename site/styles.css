@@ -974,3 +974,29 @@ textarea.field-input {
   }
 }
 
+
+/* ==================================================================== */
+/* THEME SWITCH — NIGHT MODE (default) / NORMAL MODE (light dossier)     */
+/* ==================================================================== */
+
+.theme-toggle{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:0 12px;border:1px solid #44484d;background:transparent;color:#bbb;font:10px var(--mono);letter-spacing:.12em;white-space:nowrap;cursor:pointer;transition:border-color .2s,color .2s,transform .2s}
+.theme-toggle:hover,.theme-toggle:focus-visible{border-color:var(--red);color:#fff;transform:translateY(-1px);outline:none}
+.theme-toggle span[aria-hidden]{font-size:12px;line-height:1}
+@media(max-width:620px){.theme-toggle{min-height:32px;padding:0 9px;font-size:9px}.theme-toggle span[aria-hidden]{font-size:10px}}
+
+/* Normal (light) mode: the same declassified-dossier aesthetic, inverted.
+   Everything is driven by the custom properties, so one override block
+   re-skins the homepage, the archive, and the Control Room together. */
+html[data-theme="light"]{
+  --bg:#f4f1ea;--panel:#faf8f2;--panel2:#efeadf;--line:#d8d2c4;--text:#1c1a17;--muted:#5c564b;--dim:#8a8272;--red:#b3271e;--amber:#8a6a1f;--green:#1e7a4f;
+  --line-strong:#b9b2a2;--panel-2:#efeadf;
+}
+html[data-theme="light"] body{background:radial-gradient(900px 500px at 15% -10%,rgba(138,106,31,.07),transparent 60%),radial-gradient(800px 500px at 90% 0%,rgba(30,122,79,.05),transparent 55%),var(--bg)}
+html[data-theme="light"] body::before{background-image:linear-gradient(rgba(0,0,0,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.05) 1px,transparent 1px)}
+html[data-theme="light"] .topbar{background:rgba(244,241,234,.92);border-bottom:1px solid var(--line)}
+html[data-theme="light"] .noise{opacity:.02}
+html[data-theme="light"] ::selection{background:var(--amber);color:#f4f1ea}
+html[data-theme="light"] .skip{background:var(--red);color:#fff}
+html[data-theme="light"] a:hover{color:var(--red)}
+html[data-theme="light"] .theme-toggle,html[data-theme="light"] .chart-link{border-color:#b9b2a2;color:#5c564b}
+html[data-theme="light"] .theme-toggle:hover,html[data-theme="light"] .chart-link:hover{border-color:var(--red);color:#b3271e}

@@ -9,7 +9,7 @@
 <meta property="og:title" content="FILE106 — Some files were never meant to be opened.">
 <meta property="og:description" content="PROJECT105: TERMINATED. FILE106: STILL ACTIVE.">
 <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="./styles.css?v=2">
 <!-- F106_CSRF -->
 </head>
 <body>
@@ -21,6 +21,7 @@
   </nav>
   <div class="topbar-actions">
     <span class="system-state"><i></i> ARCHIVE RESPONSE: ACTIVE</span>
+    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch between night and normal mode"><span aria-hidden="true">◐</span><span data-theme-label>DAY</span></button>
     <a class="chart-link" href="/archive">FILES</a>
     <a class="chart-link" href="https://dexscreener.com/solana/HVpCVM92m6TkJpXpnudWEDZbjq5ucLJvJuJZAzSZhqtB" target="_blank" rel="noopener" aria-label="View the F106 chart on DexScreener"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 12.5V9M6 12.5V6M9.5 12.5V8M13 12.5V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"/></svg>CHART</a>
     <a class="buy-now" href="https://jup.ag/swap/SOL-Ha6cqBCf5rCcka3M1BNK46BeBbZFbq5Mq1KgAjCmFiLE" target="_blank" rel="noopener" aria-label="Buy F106 on Jupiter"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4.5 11.5 11.5 4.5M6 4.5h5.5V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"/></svg>BUY NOW</a>
@@ -141,6 +142,7 @@
 
 <div class="modal" id="symbolModal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-card"><button class="modal-close" id="closeModal" aria-label="Close">×</button><p class="eyebrow">OBJECT INSPECTION // 8_*</p><h2 id="modalTitle">SIGNATURE FOUND.</h2><div class="modal-symbol">8_*</div><p>Embedded in the recovered sector: <code>105-08-*</code></p><p class="muted">The archive has added a new fragment to your local investigation log.</p><button class="button primary" id="ackSymbol">ACKNOWLEDGE FRAGMENT</button></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="./theme.js" defer></script>
 <script src="./app.js" defer></script>
 <script src="./mystery.js" defer></script>
 </body></html>

@@ -26,7 +26,7 @@ export function page({
   <meta name="theme-color" content="#08090b">
   <meta name="robots" content="noindex">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=2">
 </head>
 <body>
   <div class="noise" aria-hidden="true"></div>
@@ -38,6 +38,7 @@ export function page({
       <span class="system-state" style="margin-left:10px;font-size:10px;"><i></i> THE FILE106 ARCHIVE / ${terminal}</span>
     </a>
     <nav class="topbar-actions archive-nav" aria-label="Archive">
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch between night and normal mode"><span aria-hidden="true">◐</span><span data-theme-label>DAY</span></button>
       <a href="/">HOME</a>
       <a href="/archive">SECRET VAULT</a>
       ${nav
@@ -66,7 +67,7 @@ export function page({
     </p>
     <span class="footer-code">FILE106 / F106 · THE ARCHIVE // 8_*</span>
   </footer>
-  ${scripts.map((src) => html`<script src="${src}" defer></script>`)}
+  ${[...scripts, '/theme.js'].map((src) => html`<script src="${src}" defer></script>`)}
 </body>
 </html>`;
 }
