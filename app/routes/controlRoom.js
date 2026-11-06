@@ -2,6 +2,7 @@
 // settings, full audit log, team management, cover image toggle, and the
 // BTC / ETH / BNB / CONNECTION investigation helpers.
 
+import { randomBytes } from 'node:crypto';
 import { hashSecret } from '../../scripts/archive/secret-hash.mjs';
 import { ipHash } from '../lib/ip.js';
 import { redirect, sendPage } from '../lib/reply.js';
@@ -349,7 +350,7 @@ export async function registerControlRoomRoutes(app, { db, config, withCsrf, aud
       [user.id]
     );
     const unlocks = await db.many(
-      `select fu.method, fu.unlocked_at, f.file_number, f.title
+      `select fu.unlock_method, fu.unlocked_at, f.file_number, f.title
          from file_unlocks fu join files f on f.id = fu.file_id
         where fu.user_id = $1 order by fu.unlocked_at desc`,
       [user.id]
@@ -439,6 +440,136 @@ export async function registerControlRoomRoutes(app, { db, config, withCsrf, aud
     });
 
     return redirect(reply, `/admin/investigators/${before.id}?notice=investigator-activated`);
+  });
+
+  // -------------------------------------------------------------------
+  // Ban / unban / soft-delete: block access without destroying history.
+  // -------------------------------------------------------------------
+  app.post('/admin/investigators/:id/ban', async (request, reply) => {
+    if (!UUID.test(request.params.id)) return redirect(reply, '/admin/investigators?notice=investigator-unknown');
+    const before = await db.one('select id, username, status from users where id = $1', [request.params.id]);
+    if (!before) return redirect(reply, '/admin/investigators?notice=investigator-unknown');
+    await db.query("update users set status = 'banned' where id = $1", [before.id]);
+    await db.query('delete from sessions where user_id = $1', [before.id]);
+    await audit(db, { adminId: request.admin.id, action: 'investigator.ban', entity: 'users', entityId: before.id, before: { status: before.status }, after: { status: 'banned' }, ip: ipHash(request) });
+    return redirect(reply, `/admin/investigators/${before.id}?notice=investigator-banned`);
+  });
+
+  app.post('/admin/investigators/:id/unban', async (request, reply) => {
+    if (!UUID.test(request.params.id)) return redirect(reply, '/admin/investigators?notice=investigator-unknown');
+    const before = await db.one('select id, username, status from users where id = $1', [request.params.id]);
+    if (!before) return redirect(reply, '/admin/investigators?notice=investigator-unknown');
+    await db.query("update users set status = 'active' where id = $1", [before.id]);
+    await audit(db, { adminId: request.admin.id, action: 'investigator.unban', entity: 'users', entityId: before.id, before: { status: before.status }, after: { status: 'active' }, ip: ipHash(request) });
+    return redirect(reply, `/admin/investigators/${before.id}?notice=investigator-unbanned`);
+  });
+
+  app.post('/admin/investigators/:id/delete', async (request, reply) => {
+    if (!UUID.test(request.params.id)) return redirect(reply, '/admin/investigators?notice=investigator-unknown');
+    const before = await db.one('select id, username, status from users where id = $1', [request.params.id]);
+    if (!before) return redirect(reply, '/admin/investigators?notice=investigator-unknown');
+    // Soft delete: keep the row so submissions/rewards stay auditable.
+    await db.query("update users set status = 'deleted' where id = $1", [before.id]);
+    await db.query('delete from sessions where user_id = $1', [before.id]);
+    await audit(db, { adminId: request.admin.id, action: 'investigator.delete', entity: 'users', entityId: before.id, before: { status: before.status }, after: { status: 'deleted' }, ip: ipHash(request) });
+    return redirect(reply, `/admin/investigators/${before.id}?notice=investigator-deleted`);
+  });
+
+  // -------------------------------------------------------------------
+  // Promote a participant to an archivist: create an admin_users row with a
+  // temporary password and show it once. Promote and reset-password render the
+  // detail page directly so the temporary password can be displayed safely.
+  // -------------------------------------------------------------------
+  function tempPassword() {
+    return 'Rst' + randomBytes(6).toString('hex');
+  }
+
+  app.post('/admin/investigators/:id/promote', async (request, reply) => {
+    if (!UUID.test(request.params.id)) return redirect(reply, '/admin/investigators?notice=investigator-unknown');
+    const user = await db.one(
+      'select id, username, email from users where id = $1',
+      [request.params.id]
+    );
+    if (!user) return redirect(reply, '/admin/investigators?notice=investigator-unknown');
+
+    const existing = await db.one('select id from admin_users where email = $1', [user.email]);
+    if (existing) {
+      return redirect(reply, `/admin/investigators/${user.id}?notice=investigator-already-archivist`);
+    }
+
+    const password = tempPassword();
+    await db.query(
+      `insert into admin_users (email, display_name, password_hash, role)
+       values ($1, $2, $3, 'admin')`,
+      [user.email, user.username, hashSecret(password)]
+    );
+    await audit(db, {
+      adminId: request.admin.id,
+      action: 'investigator.promote',
+      entity: 'users',
+      entityId: user.id,
+      after: { role: 'admin', email: user.email },
+      ip: ipHash(request),
+    });
+
+    // Render the detail page with the temporary password shown once.
+    const u = await db.one(
+      'select id, username, email, status, created_at, email_verified_at, last_login_at from users where id = $1',
+      [user.id]
+    );
+    const wallets = await db.many('select address, is_primary, first_seen_balance_f106::text as first_seen_balance_f106, verified_at from user_wallets where user_id = $1 order by is_primary desc', [user.id]);
+    const unlocks = await db.many(`select fu.unlock_method, fu.unlocked_at, f.file_number, f.title from file_unlocks fu join files f on f.id = fu.file_id where fu.user_id = $1 order by fu.unlocked_at desc`, [user.id]);
+    const clues = await db.many(`select c.clue_no, c.title, d.discovered_at from user_clue_discoveries d join clues c on c.id = d.clue_id where d.user_id = $1 order by d.discovered_at desc`, [user.id]);
+    const submissions = await db.many(`select s.id, s.attempt_no, s.status, s.submitted_at, s.holding_snapshot_f106::text as holding_snapshot, f.file_number, f.title from submissions s join files f on f.id = s.file_id where s.user_id = $1 order by s.submitted_at desc limit 100`, [user.id]);
+    const rewards = await db.many(`select r.id, r.reward_no, r.file_number, r.amount_f106::text as amount, r.payment_status, tx.signature from rewards r left join transactions tx on tx.id = r.confirmed_transaction_id where r.user_id = $1 order by r.approved_at desc`, [user.id]);
+
+    return sendPage(
+      reply,
+      adminInvestigatorDetailPage({
+        admin: withCsrf(request),
+        user: u,
+        wallets,
+        unlocks,
+        clues,
+        submissions,
+        rewards,
+        tempPassword: password,
+        message: messageText('investigator-promoted'),
+      })
+    );
+  });
+
+  app.post('/admin/investigators/:id/reset-password', async (request, reply) => {
+    if (!UUID.test(request.params.id)) return redirect(reply, '/admin/investigators?notice=investigator-unknown');
+    const user = await db.one('select id, username, email from users where id = $1', [request.params.id]);
+    if (!user) return redirect(reply, '/admin/investigators?notice=investigator-unknown');
+
+    const password = tempPassword();
+    await db.query('update users set password_hash = $2 where id = $1', [user.id, hashSecret(password)]);
+    await db.query('delete from sessions where user_id = $1', [user.id]);
+    await audit(db, { adminId: request.admin.id, action: 'investigator.reset_password', entity: 'users', entityId: user.id, after: { reset: true }, ip: ipHash(request) });
+
+    const u = await db.one('select id, username, email, status, created_at, email_verified_at, last_login_at from users where id = $1', [user.id]);
+    const wallets = await db.many('select address, is_primary, first_seen_balance_f106::text as first_seen_balance_f106, verified_at from user_wallets where user_id = $1 order by is_primary desc', [user.id]);
+    const unlocks = await db.many(`select fu.unlock_method, fu.unlocked_at, f.file_number, f.title from file_unlocks fu join files f on f.id = fu.file_id where fu.user_id = $1 order by fu.unlocked_at desc`, [user.id]);
+    const clues = await db.many(`select c.clue_no, c.title, d.discovered_at from user_clue_discoveries d join clues c on c.id = d.clue_id where d.user_id = $1 order by d.discovered_at desc`, [user.id]);
+    const submissions = await db.many(`select s.id, s.attempt_no, s.status, s.submitted_at, s.holding_snapshot_f106::text as holding_snapshot, f.file_number, f.title from submissions s join files f on f.id = s.file_id where s.user_id = $1 order by s.submitted_at desc limit 100`, [user.id]);
+    const rewards = await db.many(`select r.id, r.reward_no, r.file_number, r.amount_f106::text as amount, r.payment_status, tx.signature from rewards r left join transactions tx on tx.id = r.confirmed_transaction_id where r.user_id = $1 order by r.approved_at desc`, [user.id]);
+
+    return sendPage(
+      reply,
+      adminInvestigatorDetailPage({
+        admin: withCsrf(request),
+        user: u,
+        wallets,
+        unlocks,
+        clues,
+        submissions,
+        rewards,
+        tempPassword: password,
+        message: messageText('investigator-password-reset'),
+      })
+    );
   });
 
   // -------------------------------------------------------------------

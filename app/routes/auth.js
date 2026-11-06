@@ -26,11 +26,13 @@ function uniqueViolation(error) {
 }
 
 export async function authRoutes(app, { db, config, mailer }) {
-  app.get('/register', async (request, reply) =>
-    sendPage(reply, registerPage({ session: request.session }))
-  );
+  app.get('/register', async (request, reply) => {
+    if (request.admin) return redirect(reply, '/admin');
+    return sendPage(reply, registerPage({ session: request.session }));
+  });
 
   app.post('/register', { config: { rateLimit: REGISTRATION_LIMIT } }, async (request, reply) => {
+    if (request.admin) return redirect(reply, '/admin');
     const body = request.body || {};
     const { errors, value } = validateRegistration(body);
 
@@ -245,14 +247,16 @@ export async function authRoutes(app, { db, config, mailer }) {
     return redirect(reply, '/login?notice=password-reset-done');
   });
 
-  app.get('/login', async (request, reply) =>
-    sendPage(
+  app.get('/login', async (request, reply) => {
+    if (request.admin) return redirect(reply, '/admin');
+    return sendPage(
       reply,
       loginPage({ session: request.session, message: messageText(String(request.query?.notice ?? '')) })
-    )
-  );
+    );
+  });
 
   app.post('/login', { config: { rateLimit: LOGIN_LIMIT } }, async (request, reply) => {
+    if (request.admin) return redirect(reply, '/admin');
     const body = request.body || {};
     const { errors, value } = validateLogin(body);
 

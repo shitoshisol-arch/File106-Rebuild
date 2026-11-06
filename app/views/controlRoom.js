@@ -255,6 +255,7 @@ export function adminInvestigatorDetailPage({
   clues = [],
   submissions = [],
   rewards = [],
+  tempPassword = '',
   message = '',
 }) {
   const body = html`
@@ -272,15 +273,46 @@ export function adminInvestigatorDetailPage({
 
     <div class="admin-panel">
       <p class="eyebrow">ACCOUNT CONTROL</p>
-      ${user.status === 'suspended'
-        ? html`<form method="post" action="/admin/investigators/${user.id}/activate" class="inline-form">
-            ${csrfField({ csrf: admin.csrf })}
-            <button class="btn primary" type="submit">REACTIVATE ACCOUNT</button>
-          </form>`
-        : html`<form method="post" action="/admin/investigators/${user.id}/suspend" class="inline-form" data-confirm="Suspend this investigator?">
-            ${csrfField({ csrf: admin.csrf })}
-            <button class="btn ghost" type="submit">SUSPEND ACCOUNT</button>
-          </form>`}
+      ${tempPassword
+        ? html`<div class="archive-notice" data-kind="dev">
+            <strong>TEMPORARY PASSWORD (shown once):</strong>
+            <p><span class="mono break">${tempPassword}</span></p>
+            <p class="fine">Hand it to the investigator. They should change it after signing in.</p>
+          </div>`
+        : raw('')}
+      ${notice('admin', message)}
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        ${user.status === 'suspended'
+          ? html`<form method="post" action="/admin/investigators/${user.id}/activate" class="inline-form">
+              ${csrfField({ csrf: admin.csrf })}
+              <button class="btn primary" type="submit">REACTIVATE</button>
+            </form>`
+          : html`<form method="post" action="/admin/investigators/${user.id}/suspend" class="inline-form" data-confirm="Suspend this investigator?">
+              ${csrfField({ csrf: admin.csrf })}
+              <button class="btn ghost" type="submit">SUSPEND</button>
+            </form>`}
+        ${user.status === 'banned'
+          ? html`<form method="post" action="/admin/investigators/${user.id}/unban" class="inline-form">
+              ${csrfField({ csrf: admin.csrf })}
+              <button class="btn primary" type="submit">UNBAN</button>
+            </form>`
+          : html`<form method="post" action="/admin/investigators/${user.id}/ban" class="inline-form" data-confirm="Ban this investigator permanently?">
+              ${csrfField({ csrf: admin.csrf })}
+              <button class="btn ghost" type="submit">BAN</button>
+            </form>`}
+        <form method="post" action="/admin/investigators/${user.id}/delete" class="inline-form" data-confirm="Remove this account (soft delete)? History is kept.">
+          ${csrfField({ csrf: admin.csrf })}
+          <button class="btn ghost" type="submit">REMOVE</button>
+        </form>
+        <form method="post" action="/admin/investigators/${user.id}/reset-password" class="inline-form" data-confirm="Reset this investigator's password?">
+          ${csrfField({ csrf: admin.csrf })}
+          <button class="btn ghost" type="submit">RESET PASSWORD</button>
+        </form>
+        <form method="post" action="/admin/investigators/${user.id}/promote" class="inline-form" data-confirm="Promote this investigator to an archivist account?">
+          ${csrfField({ csrf: admin.csrf })}
+          <button class="btn ghost" type="submit">PROMOTE TO ARCHIVIST</button>
+        </form>
+      </div>
     </div>
 
     <div class="admin-panel">
@@ -347,7 +379,7 @@ export function adminInvestigatorDetailPage({
       <p class="eyebrow">DISCOVERED FILES & CLUES</p>
       <p class="fine">
         Files unlocked (${unlocks.length}):
-        ${unlocks.map((u) => `${fileNumber(u.file_number)} (${u.method})`).join(', ') || 'none'}
+        ${unlocks.map((u) => `${fileNumber(u.file_number)} (${u.unlock_method})`).join(', ') || 'none'}
       </p>
       <p class="fine">
         Clues decoded (${clues.length}):
