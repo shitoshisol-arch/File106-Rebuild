@@ -233,8 +233,9 @@ export function dashboardPage({
         <p class="eyebrow">NEXT MOVE</p>
         <h2>THE INVESTIGATION IS STILL OPEN</h2>
         <p class="fine">
-          Every file with a reward is paid manually after an archivist verifies the answer and the
-          on-chain transfer. Nothing is paid automatically, and a duplicate claim is refused by
+          A reward, if awarded, is paid manually after an archivist verifies the answer and the
+          on-chain transfer. Completing a file does not guarantee a reward — winners are selected
+          per the file's method. Nothing is paid automatically, and a duplicate claim is refused by
           the database rather than by a browser check.
         </p>
         <p class="archive-cta">

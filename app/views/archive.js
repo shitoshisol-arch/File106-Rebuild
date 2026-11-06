@@ -194,9 +194,9 @@ function requirementsPanel({ file, eligibility, requirements, csrf }) {
     <p class="fine">
       ${file.rewardsEnabled === false
         ? 'This file carries partner conditions even though its F106 reward is off.'
-        : `The ${file.reward} F106 reward is released only after every condition below is green
-           and the answer is approved.`}
-      A green check comes from archive review of your proof — never from a click.
+        : `A ${file.reward} F106 reward can be awarded to one selected winner only after every condition below is green and the answer is approved.`}
+      Completing the conditions does not guarantee a reward. A green check comes from archive
+      review of your proof — never from a click.
     </p>
     <ul class="requirements">
       ${requirements.map((item) => requirementRow({ file, item, csrf, signedIn: eligibility.signedIn }))}
@@ -414,7 +414,7 @@ export function archiveFilePage({
         <div class="stat">
           <span class="stat-label">REWARD</span>
           <strong>${file.rewardsEnabled === false ? 'NONE' : file.reward}</strong>
-          <span class="stat-note">${file.rewardsEnabled === false ? 'Unrewarded investigation' : 'F106, paid manually after verification'}</span>
+          <span class="stat-note">${file.rewardsEnabled === false ? 'Unrewarded investigation' : 'F106 prize for one selected winner, paid manually'}</span>
         </div>
         <div class="stat">
           <span class="stat-label">MIN HOLDING</span>
