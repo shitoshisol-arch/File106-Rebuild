@@ -13,6 +13,7 @@ export function page({
   scripts = [],
   nav = null,
   terminalLabel = '',
+  systemState = null,
 }) {
   const csrf = session ? csrfField(session) : raw('');
   const terminal = terminalLabel || (signedIn ? 'AUTHORIZED' : 'PUBLIC TERMINAL');
@@ -37,7 +38,7 @@ export function page({
     <a class="brand" href="/" aria-label="FILE106 home">
       <span class="brand-mark">8_*</span>
       <span>F<span class="red">/</span>106</span>
-      <span class="system-state" style="margin-left:10px;font-size:10px;"><i></i> THE FILE106 ARCHIVE / ${terminal}</span>
+      <span class="system-state" style="margin-left:10px;font-size:10px;"><i></i> ${systemState ?? `THE FILE106 ARCHIVE / ${terminal}`}</span>
     </a>
     <nav class="topbar-actions archive-nav" aria-label="Archive">
       <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch between night and normal mode"><span aria-hidden="true">◐</span><span data-theme-label>DAY</span></button>
@@ -75,7 +76,7 @@ export function page({
       <button class="menu-close" type="button" data-menu-close aria-label="Close navigation menu">×</button>
     </div>
     <div class="mobile-nav-links">
-      <a href="/">HOME</a><a href="/archive">SECRET VAULT</a><a href="/investigate">INVESTIGATE</a>${signedIn ? html`<a href="/dashboard">MY ARCHIVE</a>` : html`<a href="/login">SIGN IN</a>`}
+      <a href="/">HOME</a><a href="/archive">SECRET VAULT</a><a href="/investigate">INVESTIGATE</a>${signedIn ? html`<a href="/dashboard">MY ARCHIVE</a>` : html`<a href="/login">SIGN IN</a><a href="/register">REGISTER</a>`}
       <button class="mobile-theme" type="button" data-theme-toggle aria-label="Switch between night and normal mode"><span aria-hidden="true">◐</span><span data-theme-label>DAY</span></button>
     </div>
     <a class="buy-now" href="https://dexscreener.com/solana/HVpCVM92m6TkJpXpnudWEDZbjq5ucLJvJuJZAzSZhqtB" target="_blank" rel="noopener" aria-label="View the F106 chart on DexScreener">CHART ↗</a>

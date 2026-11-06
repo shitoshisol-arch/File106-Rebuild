@@ -555,12 +555,9 @@
   margin-top: 12px;
 }
 
-.archive-cta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 16px 0 0;
-}
+.sign-in-icon{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border:1px solid var(--line-strong);color:var(--muted);transition:border-color .2s,color .2s,transform .2s}
+.sign-in-icon:hover,.sign-in-icon:focus-visible{border-color:var(--red);color:#fff;transform:translateY(-1px);outline:none}
+.sign-in-icon svg{width:16px;height:16px}
 
 .admin-bar {
   display: flex;

@@ -46,6 +46,21 @@ export function validateLogin({ email, password }) {
   return { errors, value: { email: mail, password: String(password ?? '') } };
 }
 
+// Shape check for a new password chosen during a reset. Same rules as
+// registration so an account cannot end up with a weaker password than it
+// started with.
+export function validatePasswordChange({ password, confirmPassword }) {
+  const errors = {};
+  const pass = String(password ?? '');
+  if (pass.length < 12) errors.password = 'Use at least 12 characters.';
+  else if (pass.length > 200) errors.password = 'That password is too long.';
+  else if (!/[a-zA-Z]/.test(pass) || !/[0-9]/.test(pass)) {
+    errors.password = 'Mix letters and numbers.';
+  }
+  if (pass !== String(confirmPassword ?? '')) errors.confirmPassword = 'Passwords do not match.';
+  return { errors, value: { password: pass } };
+}
+
 export function isSolanaAddress(value) {
   return BASE58.test(String(value ?? ''));
 }
@@ -65,6 +80,10 @@ export const MESSAGES = {
   'verify-required': 'VERIFY YOUR EMAIL BEFORE SIGNING IN.',
   'verify-failed': 'THAT VERIFICATION LINK IS INVALID OR EXPIRED.',
   'verified': 'EMAIL VERIFIED. YOU MAY SIGN IN.',
+  'password-reset-sent': 'IF AN ACCOUNT EXISTS FOR THAT EMAIL, A RESET LINK WAS ISSUED. OPEN IT WITHIN 1 HOUR.',
+  'password-reset-done': 'PASSWORD UPDATED. SIGN IN WITH THE NEW ONE.',
+  'password-reset-expired': 'THAT RESET LINK IS INVALID OR EXPIRED. REQUEST A NEW ONE.',
+  'password-reset-mismatch': 'THE PASSWORDS DO NOT MATCH.',
   'invalid-credentials': 'INVALID EMAIL OR PASSWORD.',
   'signed-out': 'SESSION CLOSED.',
   'login-required': 'ACCOUNT REQUIRED. SIGN IN TO CONTINUE.',

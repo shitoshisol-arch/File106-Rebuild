@@ -80,6 +80,7 @@ export function loginPage({ session, errors = {}, values = {}, message = '' }) {
       </form>
 
       <p class="fine">No account? <a href="/register">REQUEST ACCESS</a></p>
+     <p class="fine"><a href="/forgot-password">FORGOT PASSWORD?</a></p>
     </section>`;
 
   return page({ title: 'FILE106 — SIGN IN', body, session });
@@ -120,4 +121,69 @@ export function linkProblemPage({ session, message }) {
     </section>`;
 
   return page({ title: 'FILE106 — LINK REJECTED', body, session });
+}
+
+export function forgotPasswordPage({ session, errors = {}, values = {}, message = '' }) {
+  const body = html`
+    <section class="section archive-section">
+      <p class="eyebrow">ACCESS RECOVERY / PASSWORD</p>
+      <h1 class="archive-title">FORGOT PASSWORD</h1>
+      <p class="lede">
+        Enter the email on the account. If it exists, a reset link is issued. The link expires
+        in 1 hour.
+      </p>
+      ${notice('form', message)}
+      ${errorList(errors)}
+      <form method="post" action="/forgot-password" class="auth-form" autocomplete="on">
+        ${csrfField(session)}
+        ${field({ name: 'email', label: 'EMAIL', type: 'email', value: values.email || '', autocomplete: 'email' })}
+        <button class="btn primary" type="submit">ISSUE RESET LINK</button>
+      </form>
+      <p class="fine"><a href="/login">BACK TO SIGN IN</a></p>
+    </section>`;
+  return page({ title: 'FILE106 — FORGOT PASSWORD', body, session });
+}
+
+export function forgotPasswordSentPage({ session, devLink = '', message = '' }) {
+  const body = html`
+    <section class="section archive-section">
+      <p class="eyebrow">TRANSMISSION / PENDING</p>
+      <h1 class="archive-title">RESET LINK ISSUED</h1>
+      <p class="lede">
+        If an account exists for that email, a reset link was issued. Open it within 1 hour to
+        set a new password.
+      </p>
+      ${notice('form', message)}
+      ${devLink
+        ? html`<div class="archive-notice" data-kind="dev">
+            <strong>NO MAIL TRANSPORT CONFIGURED.</strong> The reset link is shown here because
+            SMTP_URL is empty. Set SMTP_URL in /opt/file106/.env to send it by email instead.
+            <p><a class="mono break" href="${devLink}">${devLink}</a></p>
+          </div>`
+        : raw('')}
+      <p class="fine"><a href="/login">BACK TO SIGN IN</a></p>
+    </section>`;
+  return page({ title: 'FILE106 — RESET LINK ISSUED', body, session });
+}
+
+export function resetPasswordPage({ session, token, errors = {}, values = {}, message = '' }) {
+  const body = html`
+    <section class="section archive-section">
+      <p class="eyebrow">ACCESS RECOVERY / NEW PASSWORD</p>
+      <h1 class="archive-title">SET NEW PASSWORD</h1>
+      <p class="lede">
+        Choose a password of at least 12 characters mixing letters and numbers.
+      </p>
+      ${notice('form', message)}
+      ${errorList(errors)}
+      <form method="post" action="/reset-password" class="auth-form" autocomplete="on">
+        ${csrfField(session)}
+        <input type="hidden" name="token" value="${token}">
+        ${field({ name: 'password', label: 'NEW PASSWORD', type: 'password', autocomplete: 'new-password' })}
+        ${field({ name: 'confirmPassword', label: 'CONFIRM PASSWORD', type: 'password', autocomplete: 'new-password' })}
+        <button class="btn primary" type="submit">SET PASSWORD</button>
+      </form>
+      <p class="fine"><a href="/login">BACK TO SIGN IN</a></p>
+    </section>`;
+  return page({ title: 'FILE106 — SET NEW PASSWORD', body, session });
 }

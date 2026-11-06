@@ -109,7 +109,7 @@ export function archiveListPage({
       </p>
     </section>`;
 
-  return page({ title: 'FILE106 — THE ARCHIVE', body, session });
+  return page({ title: 'FILE106 — THE ARCHIVE', body, session, systemState: 'ARCHIVE RESPONSE: ACTIVE' });
 }
 
 function checkRow(ok, label, detail) {
