@@ -26,10 +26,9 @@ export function adminVerificationsPage({ admin, rows = [], counts = {}, message 
     </div>
 
     <p class="fine">
-      A green check on a condition is set only here, by an archivist who looked at the proof.
-      The database refuses a verified row without a reviewer and a check time, so no click and
-      no code path can manufacture one — and a reward cannot be created on a file while one of
-      its required conditions is unverified.
+      A green check is set only here, by a named archivist. The database refuses a verified row
+      without a reviewer and a check time, and it blocks the reward while a required condition
+      is unverified.
     </p>
 
     ${rows.length === 0

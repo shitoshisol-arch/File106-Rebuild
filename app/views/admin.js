@@ -6,7 +6,6 @@ import {
   FILE_STATUSES,
   FILE_TYPES,
   PUZZLE_TYPES,
-  REQUIREMENT_KINDS,
   REQUIREMENT_PLATFORMS,
   WINNER_METHODS,
 } from '../lib/validate.js';
@@ -598,10 +597,9 @@ export function adminFileEditorPage({
         <div class="admin-panel" id="conditions">
           <p class="eyebrow">REWARD CONDITIONS / PARTNER TASKS</p>
           <p class="fine">
-            Tasks a participant must complete before this file's reward can be approved — for
-            example following a partner account. The participant sees a green check only after
-            an archivist verifies their submitted proof in the
-            <a href="/admin/verifications">CONDITIONS</a> queue; until then the check stays red.
+            Partner tasks the participant must complete before this file's reward can be approved.
+            The check turns green only after an archivist verifies the proof in the
+            <a href="/admin/verifications">CONDITIONS</a> queue — until then it stays red.
           </p>
 
           ${requirements.length > 0
@@ -637,20 +635,18 @@ export function adminFileEditorPage({
 
           <form method="post" action="/admin/files/${file.id}/requirements" class="admin-form">
             ${csrfField({ csrf })}
-            ${textField({ name: 'title', label: 'CONDITION TITLE', value: '', hint: 'What the participant must do, e.g. "Follow our partner on X".' })}
+            ${textField({ name: 'targetUrl', label: 'PARTNER LINK (HTTPS)', value: '', hint: 'Paste it — platform, handle and title are detected from the link.' })}
             <div class="field-row">
-              ${selectField({ name: 'platform', label: 'PLATFORM', options: REQUIREMENT_PLATFORMS, value: 'x' })}
-              ${selectField({ name: 'kind', label: 'CONDITION TYPE', options: REQUIREMENT_KINDS, value: 'social_follow' })}
-              ${textField({ name: 'position', label: 'POSITION (1-20)', type: 'number', value: '', required: false, hint: 'Blank appends after the last one.' })}
+              ${selectField({ name: 'platform', label: 'PLATFORM', options: ['auto', ...REQUIREMENT_PLATFORMS], value: 'auto', hint: 'auto reads it from the link.' })}
+              ${textField({ name: 'targetHandle', label: 'HANDLE (OPTIONAL)', value: '', required: false, hint: 'Auto-filled from the link when possible.' })}
             </div>
-            ${textField({ name: 'targetUrl', label: 'PARTNER LINK (HTTPS)', value: '', hint: 'The exact URL the participant must open or follow.' })}
-            ${textField({ name: 'targetHandle', label: 'PARTNER HANDLE', value: '', required: false, hint: 'Shown beside the link, e.g. @file106.' })}
-            ${textArea({ name: 'description', label: 'INSTRUCTIONS (OPTIONAL)', value: '', rows: 2, hint: 'Short public instructions under the condition title.' })}
+            ${textField({ name: 'title', label: 'TITLE (OPTIONAL)', value: '', required: false, hint: 'Blank = generated, e.g. "Follow @file106 on X".' })}
+            ${textField({ name: 'description', label: 'NOTE (OPTIONAL)', value: '', required: false, hint: 'One line shown under the condition on the file page.' })}
             <label class="field field-check">
               <input type="checkbox" name="isRequired" value="1" checked>
-              <span>Required — the reward is blocked until this is verified</span>
+              <span>Required — the reward is blocked until verified</span>
             </label>
-            <button class="btn ghost" type="submit">ADD REWARD CONDITION</button>
+            <button class="btn ghost" type="submit">ADD CONDITION</button>
           </form>
         </div>
 

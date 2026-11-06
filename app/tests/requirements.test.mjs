@@ -184,18 +184,15 @@ await check('the archivist creates a file, seals an answer and publishes it', as
   assert.equal(published.statusCode, 303);
 });
 
-await check('the archivist attaches a partner follow condition', async () => {
+await check('the archivist adds a condition by pasting only the partner link', async () => {
+  // One required input: the link. Platform, handle, type and title are all
+  // derived from it server-side.
   const added = await postForm(
     `/admin/files/${fileId}/requirements`,
     {
       csrf: adminCsrf,
-      title: 'Follow our partner on X',
-      platform: 'x',
-      kind: 'social_follow',
       targetUrl: 'https://x.com/file106',
-      targetHandle: '@file106',
-      description: 'Follow the partner account from the link, then submit your handle as proof.',
-      position: '',
+      platform: 'auto',
       isRequired: '1',
     },
     admin
@@ -205,11 +202,14 @@ await check('the archivist attaches a partner follow condition', async () => {
   assert.match(added.headers.location, /notice=requirement-created$/);
 
   const row = await db.one(
-    'select position, platform, is_required, target_url from file_requirements where file_id = $1',
+    'select position, platform, kind, title, is_required, target_url, target_handle from file_requirements where file_id = $1',
     [fileId]
   );
   assert.equal(row.position, 1, 'a blank position appends after the last one');
-  assert.equal(row.platform, 'x');
+  assert.equal(row.platform, 'x', 'the platform is read from the link domain');
+  assert.equal(row.kind, 'social_follow', 'a social platform is a follow task');
+  assert.equal(row.target_handle, '@file106', 'the handle is read from the link path');
+  assert.equal(row.title, 'Follow @file106 on X', 'the title is generated');
   assert.equal(row.is_required, true);
   assert.equal(row.target_url, 'https://x.com/file106');
 });
@@ -217,14 +217,7 @@ await check('the archivist attaches a partner follow condition', async () => {
 await check('a condition link that is not HTTPS is refused', async () => {
   const refused = await postForm(
     `/admin/files/${fileId}/requirements`,
-    {
-      csrf: adminCsrf,
-      title: 'Bad link',
-      platform: 'website',
-      kind: 'visit_link',
-      targetUrl: 'javascript:alert(1)',
-      isRequired: '1',
-    },
+    { csrf: adminCsrf, targetUrl: 'javascript:alert(1)' },
     admin
   );
 
@@ -239,8 +232,8 @@ await check('the editor shows the condition with its review counters', async () 
   const page = await app.inject({ method: 'GET', url: `/admin/files/${fileId}`, cookies: admin });
   assert.equal(page.statusCode, 200);
   assert.match(page.body, /REWARD CONDITIONS \/ PARTNER TASKS/);
-  assert.match(page.body, /Follow our partner on X/);
-  assert.match(page.body, /ADD REWARD CONDITION/);
+  assert.match(page.body, /Follow @file106 on X/);
+  assert.match(page.body, /ADD CONDITION/);
 });
 
 console.log('the participant view');
@@ -435,25 +428,23 @@ console.log('rejection and resubmission');
 let secondRequirementId;
 
 await check('a second required condition renders red for the same participant', async () => {
+  // Again only the link: Telegram is detected, the verb becomes Join.
   const added = await postForm(
     `/admin/files/${fileId}/requirements`,
-    {
-      csrf: adminCsrf,
-      title: 'Join the partner Telegram',
-      platform: 'telegram',
-      kind: 'social_follow',
-      targetUrl: 'https://t.me/file106',
-      targetHandle: '@file106',
-      isRequired: '1',
-    },
+    { csrf: adminCsrf, targetUrl: 'https://t.me/file106' },
     admin
   );
   assert.match(added.headers.location, /notice=requirement-created$/);
 
-  secondRequirementId = await db.value(
-    'select id::text as v from file_requirements where file_id = $1 and position = 2',
+  const row = await db.one(
+    'select id, platform, kind, title, target_handle from file_requirements where file_id = $1 and position = 2',
     [fileId]
   );
+  secondRequirementId = row.id;
+  assert.equal(row.platform, 'telegram');
+  assert.equal(row.kind, 'social_follow');
+  assert.equal(row.target_handle, '@file106');
+  assert.equal(row.title, 'Join @file106 on Telegram', 'the generated verb fits the platform');
 
   const page = await app.inject({ method: 'GET', url: `/archive/${fileSlug}`, cookies: participant });
   assert.match(page.body, /1 OF 2 VERIFIED/);

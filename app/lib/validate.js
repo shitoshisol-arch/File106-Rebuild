@@ -741,40 +741,118 @@ export const REQUIREMENT_PLATFORMS = [
 
 export const REQUIREMENT_KINDS = ['social_follow', 'visit_link', 'custom'];
 
+// Short display names for generated titles.
+const PLATFORM_LABELS = {
+  x: 'X',
+  telegram: 'Telegram',
+  discord: 'Discord',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+};
+
+const SOCIAL_PLATFORMS = ['x', 'telegram', 'discord', 'instagram', 'tiktok', 'youtube'];
+
+const PLATFORM_DOMAINS = [
+  [/^(www\.)?(x|twitter)\.com$/i, 'x'],
+  [/^(www\.)?(t|telegram)\.me$/i, 'telegram'],
+  [/^(www\.)?discord\.(gg|com)$/i, 'discord'],
+  [/^(www\.)?instagram\.com$/i, 'instagram'],
+  [/^(www\.)?tiktok\.com$/i, 'tiktok'],
+  [/^(www\.)?(youtube\.com|youtu\.be)$/i, 'youtube'],
+];
+
+// The partner link is the one required input. Everything else the old form
+// asked for is derived from it here, on the server, so the archivist pastes a
+// URL and presses one button.
+export function detectRequirementPlatform(url) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    for (const [pattern, platform] of PLATFORM_DOMAINS) {
+      if (pattern.test(host)) return platform;
+    }
+  } catch {
+    // Not a parseable URL: the caller reports that separately.
+  }
+  return null;
+}
+
+function deriveHandle(url, platform) {
+  // Only platforms whose URL path is the handle. Discord invites and plain
+  // websites are not handles, and YouTube only counts @handles.
+  if (!['x', 'telegram', 'instagram', 'tiktok', 'youtube'].includes(platform)) return '';
+  try {
+    const segment = new URL(url).pathname.replace(/^\/+/, '').split('/')[0] ?? '';
+    if (!segment || segment.length > 100) return '';
+    if (platform === 'youtube') return segment.startsWith('@') ? segment : '';
+    return segment.startsWith('@') ? segment : `@${segment}`;
+  } catch {
+    return '';
+  }
+}
+
+function autoTitle({ platform, kind, handle, url }) {
+  if (kind === 'social_follow') {
+    const verb = platform === 'telegram' || platform === 'discord' ? 'Join' : 'Follow';
+    const label = PLATFORM_LABELS[platform] ?? 'the partner channel';
+    return `${verb} ${handle || 'the partner'} on ${label}`;
+  }
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    return host ? `Open ${host}` : 'Open the partner page';
+  } catch {
+    return 'Open the partner page';
+  }
+}
+
 export function validateRequirementInput(body = {}) {
   const errors = {};
-
-  const kind = normalizeText(body.kind) || 'social_follow';
-  if (!REQUIREMENT_KINDS.includes(kind)) errors.kind = 'Unknown condition type.';
-
-  const platform = normalizeText(body.platform).toLowerCase() || 'x';
-  if (!REQUIREMENT_PLATFORMS.includes(platform)) errors.platform = 'Unknown platform.';
-
-  const title = normalizeText(body.title);
-  if (!title) errors.title = 'Say what the participant must do.';
-  else if (title.length > 120) errors.title = 'Keep the condition title under 120 characters.';
-
-  const description = normalizeText(body.description);
-  if (description.length > 500) errors.description = 'Keep the description under 500 characters.';
 
   // The link is opened by participants, so it must be an absolute HTTPS URL.
   // A javascript: or data: scheme is refused before it can reach the page.
   const targetUrl = normalizeText(body.targetUrl);
+  let parsedUrl = null;
   if (!targetUrl) {
-    errors.targetUrl = 'Paste the partner link participants must open.';
+    errors.targetUrl = 'Paste the partner link.';
   } else if (targetUrl.length > 500) {
     errors.targetUrl = 'Keep the link under 500 characters.';
   } else {
     try {
-      const parsed = new URL(targetUrl);
-      if (parsed.protocol !== 'https:') errors.targetUrl = 'The link must start with https://';
+      parsedUrl = new URL(targetUrl);
+      if (parsedUrl.protocol !== 'https:') errors.targetUrl = 'The link must start with https://';
     } catch {
       errors.targetUrl = 'That is not a valid URL.';
     }
   }
 
-  const targetHandle = normalizeText(body.targetHandle);
+  // Platform: an explicit choice wins, otherwise it is read from the link's
+  // domain, otherwise the link is a plain website to visit.
+  const platformInput = normalizeText(body.platform).toLowerCase();
+  const platform =
+    platformInput === '' || platformInput === 'auto'
+      ? (parsedUrl ? detectRequirementPlatform(targetUrl) : null) ?? 'website'
+      : platformInput;
+  if (!REQUIREMENT_PLATFORMS.includes(platform)) errors.platform = 'Unknown platform.';
+
+  // Type: social platforms are follows, everything else is a link to open.
+  const kindInput = normalizeText(body.kind);
+  const kind =
+    kindInput && REQUIREMENT_KINDS.includes(kindInput)
+      ? kindInput
+      : SOCIAL_PLATFORMS.includes(platform)
+        ? 'social_follow'
+        : 'visit_link';
+
+  // Handle: explicit wins, otherwise taken from the link's path.
+  const targetHandle = normalizeText(body.targetHandle) || deriveHandle(targetUrl, platform);
   if (targetHandle.length > 100) errors.targetHandle = 'Keep the handle under 100 characters.';
+
+  // Title: explicit wins, otherwise generated from what the link is.
+  const title = normalizeText(body.title) || autoTitle({ platform, kind, handle: targetHandle, url: targetUrl });
+  if (title.length > 120) errors.title = 'Keep the title under 120 characters.';
+
+  const description = normalizeText(body.description);
+  if (description.length > 500) errors.description = 'Keep the note under 500 characters.';
 
   const positionRaw = normalizeText(body.position);
   let position = null;

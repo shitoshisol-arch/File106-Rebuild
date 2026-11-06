@@ -194,9 +194,9 @@ function requirementsPanel({ file, eligibility, requirements, csrf }) {
     <p class="fine">
       ${file.rewardsEnabled === false
         ? 'This file carries partner conditions even though its F106 reward is off.'
-        : `The ${file.reward} F106 reward for this file is released only after every required
-           condition below carries a green check and the archivist approves the answer.`}
-      A green check is set by the archive after your proof is reviewed — never by clicking.
+        : `The ${file.reward} F106 reward is released only after every condition below is green
+           and the answer is approved.`}
+      A green check comes from archive review of your proof — never from a click.
     </p>
     <ul class="requirements">
       ${requirements.map((item) => requirementRow({ file, item, csrf, signedIn: eligibility.signedIn }))}
