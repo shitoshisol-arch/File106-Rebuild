@@ -97,8 +97,9 @@ export function verificationSentPage({ session, devLink = '' }) {
 
       ${devLink
         ? html`<div class="archive-notice" data-kind="dev">
-            <strong>DEVELOPMENT MODE.</strong> No mail transport is configured, so the link is
-            printed here and in the server log. In production it is only emailed.
+            <strong>NO MAIL TRANSPORT CONFIGURED.</strong> The verification link is shown here
+            because SMTP_URL is empty. Set SMTP_URL in /opt/file106/.env to send it by email
+            instead.
             <p><a class="mono break" href="${devLink}">${devLink}</a></p>
           </div>`
         : raw('')}

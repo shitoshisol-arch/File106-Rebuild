@@ -107,9 +107,9 @@ export function loadConfig(overrides = {}) {
       smtpUrl,
       from: text(env.MAIL_FROM, 'archive@file106.local'),
       // With no SMTP transport the verification link is written to the server
-      // log and, outside production only, echoed on the confirmation page so
-      // the flow can be completed locally.
-      exposeLinks: !smtpUrl && !isProduction,
+      // log and echoed on the confirmation page so the flow can be completed
+      // without an email provider. Configure SMTP_URL to send it by email.
+      exposeLinks: !smtpUrl,
     },
 
     features: {
