@@ -41,6 +41,21 @@ export async function homeRoutes(app, { db, config }) {
 
   app.get('/index.html', async (request, reply) => reply.code(301).header('location', '/').send());
 
+  app.get('/api/me', async (request, reply) => {
+    const user = request.user;
+    const admin = request.admin;
+    const isAdmin = Boolean(admin);
+    reply.header('cache-control', 'no-store');
+    return reply.send({
+      signedIn: Boolean(user) || isAdmin,
+      isAdmin,
+      username: user?.username ?? admin?.display_name ?? null,
+      dashboard: isAdmin ? '/admin' : '/dashboard',
+      logoutUrl: isAdmin ? '/admin/logout' : '/logout',
+      logoutCsrf: request.session?.csrf ?? null,
+    });
+  });
+
   app.get('/', async (request, reply) => {
     const token = csrfToken(request.session);
     let body = template.includes(CSRF_MARKER)

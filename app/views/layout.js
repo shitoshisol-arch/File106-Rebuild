@@ -17,6 +17,7 @@ export function page({
 }) {
   const csrf = session ? csrfField(session) : raw('');
   const terminal = terminalLabel || (signedIn ? 'AUTHORIZED' : 'PUBLIC TERMINAL');
+  const adminSignedIn = Boolean(session?.adminId);
 
   return html`<!doctype html>
 <html lang="en">
@@ -46,8 +47,14 @@ export function page({
       <a href="/archive">SECRET VAULT</a>
       ${nav
         ? nav
-        : signedIn
-          ? html`<a href="/dashboard">MY ARCHIVE</a>
+        : adminSignedIn
+          ? html`<a class="account-icon" href="/admin" aria-label="Admin panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></a>
+              <form method="post" action="/admin/logout" class="nav-form">
+                ${csrf}
+                <button type="submit" class="nav-button">SIGN OUT</button>
+              </form>`
+          : signedIn
+          ? html`<a class="account-icon" href="/dashboard" aria-label="My account — ${signedInName}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></a>
               <form method="post" action="/logout" class="nav-form">
                 ${csrf}
                 <button type="submit" class="nav-button">SIGN OUT</button>
@@ -76,7 +83,7 @@ export function page({
       <button class="menu-close" type="button" data-menu-close aria-label="Close navigation menu">×</button>
     </div>
     <div class="mobile-nav-links">
-      <a href="/">HOME</a><a href="/archive">SECRET VAULT</a><a href="/investigate">INVESTIGATE</a>${signedIn ? html`<a href="/dashboard">MY ARCHIVE</a>` : html`<a href="/login">SIGN IN</a><a href="/register">REGISTER</a>`}
+      <a href="/">HOME</a><a href="/archive">SECRET VAULT</a><a href="/investigate">INVESTIGATE</a>${adminSignedIn ? html`<a href="/admin">CONTROL ROOM</a>` : signedIn ? html`<a href="/dashboard">MY ARCHIVE</a>` : html`<a href="/login">SIGN IN</a><a href="/register">REGISTER</a>`}
       <button class="mobile-theme" type="button" data-theme-toggle aria-label="Switch between night and normal mode"><span aria-hidden="true">◐</span><span data-theme-label>DAY</span></button>
     </div>
     <a class="buy-now" href="https://dexscreener.com/solana/HVpCVM92m6TkJpXpnudWEDZbjq5ucLJvJuJZAzSZhqtB" target="_blank" rel="noopener" aria-label="View the F106 chart on DexScreener">CHART ↗</a>
